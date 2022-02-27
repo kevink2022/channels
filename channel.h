@@ -28,7 +28,7 @@ typedef struct {
     buffer_t*           buffer;
 
     //
-    pthread_mutex_t   * channel_lock;  
+    pthread_mutex_t   * lock;  
     sem_t             * recv_sem;       // Semaphore for blocking recieve
     sem_t             * send_sem;       // Semaphore for blocking send
     u_int               recv_queue;     // Tracks how many blocking recieve calls are queued

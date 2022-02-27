@@ -4,8 +4,22 @@
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)
 {
-    /* IMPLEMENT THIS */
-    return NULL;
+    channel_t * new_channel;
+    pthread_mutex_t * channel_mutex = PTHREAD_MUTEX_INITIALIZER;
+    sem_t * recv_sem, * send_sem;
+
+    sem_init(recv_sem, 0, 1);
+    sem_init(send_sem, 0, 1);
+
+    new_channel->buffer = buffer_create(size);
+    new_channel->lock = channel_mutex;
+    new_channel->recv_sem = recv_sem;
+    new_channel->send_sem = send_sem;
+    new_channel->recv_queue = 0;
+    new_channel->send_queue = 0;
+    new_channel->closed = false;
+
+    return new_channel;
 }
 
 // Writes data to the given channel
