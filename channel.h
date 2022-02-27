@@ -25,10 +25,15 @@ enum channel_status {
 typedef struct {
     // DO NOT REMOVE buffer (OR CHANGE ITS NAME) FROM THE STRUCT
     // YOU MUST USE buffer TO STORE YOUR BUFFERED CHANNEL MESSAGES
-    buffer_t* buffer;
+    buffer_t*           buffer;
 
-    /* ADD ANY STRUCT ENTRIES YOU NEED HERE */
-    /* IMPLEMENT THIS */
+    //
+    pthread_mutex_t   * channel_lock;  
+    sem_t             * recv_sem;       // Semaphore for blocking recieve
+    sem_t             * send_sem;       // Semaphore for blocking send
+    u_int               recv_queue;     // Tracks how many blocking recieve calls are queued
+    u_int               send_queue;     // Tracks how many blocking send calls are queued
+    bool                closed; 
 } channel_t;
 
 // Defines channel list structure for channel_select function
@@ -104,5 +109,22 @@ enum channel_status channel_destroy(channel_t* channel);
 // In the event that a channel is closed or encounters any error, the error should be propagated and returned through select
 // Additionally, selected_index is set to the index of the channel that generated the error
 enum channel_status channel_select(select_t* channel_list, size_t channel_count, size_t* selected_index);
+
+//////////////////////////////////////////
+// INLINE HELPER FUNCTIONS
+
+//////////////////////////////////////////
+// buffer_full()
+// returns true if the buffer is full
+static inline bool buffer_full(buffer_t* buffer){
+    return (buffer->size == buffer->capacity);
+}
+
+//////////////////////////////////////////
+// buffer_empty()
+// returns true if the buffer is full
+static inline bool buffer_full(buffer_t* buffer){
+    return (0 == buffer->capacity);
+}
 
 #endif // CHANNEL_H
