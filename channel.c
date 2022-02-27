@@ -42,8 +42,24 @@ enum channel_status channel_send(channel_t *channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    pthread_mutex_lock(channel->lock);
+    if (channel->closed){
+        pthread_mutex_unlock(channel->lock);
+        return CLOSED_ERROR;
+    }
+    else if (buffer_full(channel->buffer)){
+        pthread_mutex_unlock(channel->lock);
+        return CHANNEL_EMPTY;
+    }
+    else{
+        if(channel->send_queue){
+            channel->send_queue--;
+            sem_post(channel->send_sem);
+        }
+        buffer_remove(channel->buffer, data);
+        pthread_mutex_unlock(channel->lock);
+        return SUCCESS;
+    }
 }
 
 // Writes data to the given channel
@@ -54,8 +70,24 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    pthread_mutex_lock(channel->lock);
+    if (channel->closed){
+        pthread_mutex_unlock(channel->lock);
+        return CLOSED_ERROR;
+    }
+    else if (buffer_full(channel->buffer)){
+        pthread_mutex_unlock(channel->lock);
+        return CHANNEL_FULL;
+    }
+    else{
+        if(channel->recv_queue){
+            channel->recv_queue--;
+            sem_post(channel->recv_sem);
+        }
+        buffer_add(channel->buffer, data);
+        pthread_mutex_unlock(channel->lock);
+        return SUCCESS;
+    }
 }
 
 // Reads data from the given channel and stores it in the function's input parameter data (Note that it is a double pointer)
