@@ -5,9 +5,10 @@
 channel_t* channel_create(size_t size)
 {
     channel_t * new_channel;
-    pthread_mutex_t * channel_mutex = PTHREAD_MUTEX_INITIALIZER;
-    sem_t * recv_sem, * send_sem;
+    pthread_mutex_t * channel_mutex = malloc(sizeof(pthread_mutex_t));
+    sem_t * recv_sem = malloc(sizeof(sem_t)), * send_sem = malloc(sizeof(sem_t));
 
+    pthread_mutex_init(channel_mutex, NULL);
     sem_init(recv_sem, 0, 1);
     sem_init(send_sem, 0, 1);
 
@@ -49,13 +50,13 @@ enum channel_status channel_send(channel_t *channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
-    int ret = channel_non_blocking_send(channel, data);
+    int ret = channel_non_blocking_receive(channel, data);
     while(ret == CHANNEL_FULL){ // While and not if due to specific condition
         pthread_mutex_lock(channel->lock);
-        channel->send_queue++;
+        channel->recv_queue++;
         pthread_mutex_unlock(channel->lock);
         sem_wait(channel->send_sem);
-        ret = channel_non_blocking_send(channel, data);
+        ret = channel_non_blocking_receive(channel, data);
     }
     return ret;
 }
@@ -169,8 +170,18 @@ enum channel_status channel_close(channel_t* channel)
 // GEN_ERROR in any other error case
 enum channel_status channel_destroy(channel_t* channel)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    pthread_mutex_lock(channel->lock);
+    if(channel->closed){
+        buffer_free(channel->buffer);
+        sem_destroy(channel->recv_sem);
+        sem_destroy(channel->send_sem);
+        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_destroy(channel->buffer);
+        return SUCCESS;
+    } 
+    else {
+        return DESTROY_ERROR;
+    }
 }
 
 // Takes an array of channels (channel_list) of type select_t and the array length (channel_count) as inputs
