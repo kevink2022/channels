@@ -4,7 +4,7 @@
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)
 {
-    channel_t * new_channel;
+    channel_t * new_channel = malloc(sizeof(channel_t));
     pthread_mutex_t * channel_mutex = malloc(sizeof(pthread_mutex_t));
     sem_t * recv_sem = malloc(sizeof(sem_t)), * send_sem = malloc(sizeof(sem_t));
 
@@ -176,7 +176,7 @@ enum channel_status channel_destroy(channel_t* channel)
         sem_destroy(channel->recv_sem);
         sem_destroy(channel->send_sem);
         pthread_mutex_unlock(channel->lock);
-        pthread_mutex_destroy(channel->buffer);
+        pthread_mutex_destroy(channel->lock);
         return SUCCESS;
     } 
     else {

@@ -123,7 +123,7 @@ static inline bool buffer_full(buffer_t* buffer){
 //////////////////////////////////////////
 // buffer_empty()
 // returns true if the buffer is full
-static inline bool buffer_full(buffer_t* buffer){
+static inline bool buffer_empty(buffer_t* buffer){
     return (0 == buffer->capacity);
 }
 
