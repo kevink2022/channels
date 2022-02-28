@@ -114,7 +114,7 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
         pthread_mutex_unlock(channel->lock);
         return CLOSED_ERROR;
     }
-    else if (buffer_full(channel->buffer)){
+    else if (buffer_empty(channel->buffer)){
         pthread_mutex_unlock(channel->lock);
         return CHANNEL_EMPTY;
     }
