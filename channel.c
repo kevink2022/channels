@@ -13,17 +13,15 @@ channel_t* channel_create(size_t size)
     //new_channel->lock = malloc(sizeof(pthread_mutex_t));
     //new_channel->recv_sem = malloc(sizeof(sem_t));
     //new_channel->send_sem = malloc(sizeof(sem_t));
-    pthread_mutex_init(new_channel->lock, NULL);
-    sem_init(new_channel->recv_sem, 0, 1);
-    sem_init(new_channel->send_sem, 0, 1);
+    pthread_mutex_init(&(new_channel->lock), NULL);
+    sem_init(&(new_channel->recv_sem), 0, 1);
+    sem_init(&(new_channel->send_sem), 0, 1);
     //new_channel->lock = channel_mutex;
     //new_channel->recv_sem = recv_sem;
     //new_channel->send_sem = send_sem;
     new_channel->recv_queue = 0;
     new_channel->send_queue = 0;
     new_channel->closed = false;
-
-    print(new_channel);
 
     return new_channel;
 }
@@ -38,10 +36,10 @@ enum channel_status channel_send(channel_t *channel, void* data)
 {
     int ret = channel_non_blocking_send(channel, data);
     while(ret == CHANNEL_FULL){ // While and not if due to specific condition
-        pthread_mutex_lock(channel->lock);
+        pthread_mutex_lock(&(channel->lock));
         channel->send_queue++;
-        pthread_mutex_unlock(channel->lock);
-        if(sem_wait(channel->send_sem)){
+        pthread_mutex_unlock(&(channel->lock));
+        if(sem_wait(&(channel->send_sem))){
             printf("Send Semaphore Failed");
         }
         ret = channel_non_blocking_send(channel, data);
@@ -59,10 +57,10 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 {
     int ret = channel_non_blocking_receive(channel, data);
     while(ret == CHANNEL_FULL){ // While and not if due to specific condition
-        pthread_mutex_lock(channel->lock);
+        pthread_mutex_lock(&(channel->lock));
         channel->recv_queue++;
-        pthread_mutex_unlock(channel->lock);
-        if(sem_wait(channel->recv_sem)){
+        pthread_mutex_unlock(&(channel->lock));
+        if(sem_wait(&(channel->recv_sem))){
             printf("Recv Semaphore Failed");
         }
         ret = channel_non_blocking_receive(channel, data);
@@ -78,18 +76,18 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 {
-    pthread_mutex_lock(channel->lock);
+    pthread_mutex_lock(&(channel->lock));
     if (channel->closed){
         // Sem_post to empty the empty the queue
         if(channel->send_queue){
             channel->send_queue--;
-            sem_post(channel->send_sem);
+            sem_post(&(channel->send_sem));
         }
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return CLOSED_ERROR;
     }
     else if (buffer_full(channel->buffer)){
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return CHANNEL_FULL;
     }
     else{
@@ -97,10 +95,10 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
         //  buffer won't be empty and a recieve can execute
         if(channel->recv_queue){
             channel->recv_queue--;
-            sem_post(channel->recv_sem);
+            sem_post(&(channel->recv_sem));
         }
         buffer_add(channel->buffer, data);
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return SUCCESS;
     }
 }
@@ -113,18 +111,18 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_receive(channel_t* channel, void** data)
 {
-    pthread_mutex_lock(channel->lock);
+    pthread_mutex_lock(&(channel->lock));
     if (channel->closed){
         // Sem_post to empty the empty the queue
         if(channel->recv_queue){
             channel->recv_queue--;
-            sem_post(channel->recv_sem);
+            sem_post(&(channel->recv_sem));
         }
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return CLOSED_ERROR;
     }
     else if (buffer_empty(channel->buffer)){
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return CHANNEL_EMPTY;
     }
     else{
@@ -132,10 +130,10 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
         //  buffer won't be full and a send can execute
         if(channel->send_queue){
             channel->send_queue--;
-            sem_post(channel->send_sem);
+            sem_post(&(channel->send_sem));
         }
         buffer_remove(channel->buffer, data);
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return SUCCESS;
     }
 }
@@ -149,25 +147,25 @@ enum channel_status channel_close(channel_t* channel)
 {
     // Since all send/recieve go thru the non-blocking ops, and all non-blocking ops hold the lock until they return,
     //  nothing will send/recieve after close is set.
-    pthread_mutex_lock(channel->lock);
+    pthread_mutex_lock(&(channel->lock));
     if(!channel->closed){
         channel->closed = true;
         // By doing a sem_post for each semiphore, both queues wills start emptying,
         //  all returning CLOSED_ERROR
         if(channel->send_queue){
             channel->send_queue--;
-            sem_post(channel->send_sem);
+            sem_post(&(channel->send_sem));
         }
         if(channel->recv_queue){
             channel->recv_queue--;
-            sem_post(channel->recv_sem);
+            sem_post(&(channel->recv_sem));
         }
 
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return SUCCESS;
     }
     else {
-        pthread_mutex_unlock(channel->lock);
+        pthread_mutex_unlock(&(channel->lock));
         return CLOSED_ERROR;
     }
 }
@@ -179,13 +177,13 @@ enum channel_status channel_close(channel_t* channel)
 // GEN_ERROR in any other error case
 enum channel_status channel_destroy(channel_t* channel)
 {
-    pthread_mutex_lock(channel->lock);
+    pthread_mutex_lock(&(channel->lock));
     if(channel->closed){
         buffer_free(channel->buffer);
-        sem_destroy(channel->recv_sem);
-        sem_destroy(channel->send_sem);
-        pthread_mutex_unlock(channel->lock);
-        pthread_mutex_destroy(channel->lock);
+        sem_destroy(&(channel->recv_sem));
+        sem_destroy(&(channel->send_sem));
+        pthread_mutex_unlock(&(channel->lock));
+        pthread_mutex_destroy(&(channel->lock));
         free(channel);
         return SUCCESS;
     } 
