@@ -36,7 +36,9 @@ enum channel_status channel_send(channel_t *channel, void* data)
         pthread_mutex_lock(channel->lock);
         channel->send_queue++;
         pthread_mutex_unlock(channel->lock);
-        sem_wait(channel->send_sem);
+        if(sem_wait(channel->send_sem)){
+            printf("Send Semaphore Failed");
+        }
         ret = channel_non_blocking_send(channel, data);
     }
     return ret;
@@ -55,7 +57,9 @@ enum channel_status channel_receive(channel_t* channel, void** data)
         pthread_mutex_lock(channel->lock);
         channel->recv_queue++;
         pthread_mutex_unlock(channel->lock);
-        sem_wait(channel->send_sem);
+        if(sem_wait(channel->recv_sem)){
+            printf("Recv Semaphore Failed");
+        }
         ret = channel_non_blocking_receive(channel, data);
     }
     return ret;
@@ -177,6 +181,7 @@ enum channel_status channel_destroy(channel_t* channel)
         sem_destroy(channel->send_sem);
         pthread_mutex_unlock(channel->lock);
         pthread_mutex_destroy(channel->lock);
+        free(channel);
         return SUCCESS;
     } 
     else {
