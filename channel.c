@@ -5,20 +5,25 @@
 channel_t* channel_create(size_t size)
 {
     channel_t * new_channel = malloc(sizeof(channel_t));
-    pthread_mutex_t * channel_mutex = malloc(sizeof(pthread_mutex_t));
-    sem_t * recv_sem = malloc(sizeof(sem_t)), * send_sem = malloc(sizeof(sem_t));
-
-    pthread_mutex_init(channel_mutex, NULL);
-    sem_init(recv_sem, 0, 1);
-    sem_init(send_sem, 0, 1);
+    //pthread_mutex_t * channel_mutex = malloc(sizeof(pthread_mutex_t));
+    //sem_t * recv_sem = malloc(sizeof(sem_t));
+    //sem_t * send_sem = malloc(sizeof(sem_t));
 
     new_channel->buffer = buffer_create(size);
-    new_channel->lock = channel_mutex;
-    new_channel->recv_sem = recv_sem;
-    new_channel->send_sem = send_sem;
+    //new_channel->lock = malloc(sizeof(pthread_mutex_t));
+    //new_channel->recv_sem = malloc(sizeof(sem_t));
+    //new_channel->send_sem = malloc(sizeof(sem_t));
+    pthread_mutex_init(new_channel->lock, NULL);
+    sem_init(new_channel->recv_sem, 0, 1);
+    sem_init(new_channel->send_sem, 0, 1);
+    //new_channel->lock = channel_mutex;
+    //new_channel->recv_sem = recv_sem;
+    //new_channel->send_sem = send_sem;
     new_channel->recv_queue = 0;
     new_channel->send_queue = 0;
     new_channel->closed = false;
+
+    print(new_channel);
 
     return new_channel;
 }
