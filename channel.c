@@ -1,14 +1,32 @@
 #include "channel.h"
 
+/* 
+ * This implementation uses non-blocking calls as the base level, the calls that do the actual sending/recieveing  
+ *   Blocking calls simply call the non-blocking version. If the channel is full, they join a 'queue,' enforced 
+ *   by a semaphore of size 1, before trying another non-blocking call.
+ * 
+ * Some things to note
+ * 
+ *      - I will likely replace the channel lock with a semaphore of size 1, so when multiple threads are waiting,
+ *        they will be processed FIFO instead of whichever thread randomly grabs the lock
+ * 
+ *      - I tried to combine the sending queue and recieving queue into one single semaphore, as the sending queue
+ *        is only used when the channel is full, and recieve when the channel is empty. However, this broke my code.
+ *        I may try again later if I have time, or break down why it doesn't work.
+ * 
+ *      - The use of while loops in the blocking functions catch one possible edge condition:
+ *        if the user sends a non-blocking call, it can take the spot of a blocking call after 
+ *        it leaves the queue, so it needs to go back into the queue. I never tested if this comes
+ *        up in practice, I might if I'm bored later.
+ * 
+ * All this is subject to change when I implement select, and possibly unbuffered.
+ */
+
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)
 {
     channel_t * new_channel = malloc(sizeof(channel_t));
-    // if(new_channel == NULL){
-    //     printf("create_channel malloc failed");
-    //     return NULL;
-    // }
 
     new_channel->buffer = buffer_create(size);
     pthread_mutex_init(&(new_channel->lock), NULL);
@@ -30,15 +48,17 @@ channel_t* channel_create(size_t size)
 enum channel_status channel_send(channel_t *channel, void* data)
 {
     int ret = channel_non_blocking_send(channel, data);
-    while(ret == CHANNEL_FULL){ // While and not if due to specific condition
+    while(ret == CHANNEL_FULL){
         pthread_mutex_lock(&(channel->lock));
+        // If channel is full, add this send request to the queue.
         channel->send_queue++;
         pthread_mutex_unlock(&(channel->lock));
-        if(sem_wait(&(channel->send_sem))){
-            printf("Send Semaphore Failed");
-        }
+        sem_wait(&(channel->send_sem));
         ret = channel_non_blocking_send(channel, data);
     }
+    // This is a while loop and not an if loop to catch one possible condition:
+    //  if the user sends a non-blocking call, it can take the spot of a blocking
+    //  call after it leaves the queue, so it needs to go back into the queue
     return ret;
 }
 
@@ -51,13 +71,12 @@ enum channel_status channel_send(channel_t *channel, void* data)
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
     int ret = channel_non_blocking_receive(channel, data);
-    while(ret == CHANNEL_FULL){ // While and not if due to specific condition
+    while(ret == CHANNEL_FULL){ 
         pthread_mutex_lock(&(channel->lock));
+        // If channel is full, add this recv request to the queue.
         channel->recv_queue++;
         pthread_mutex_unlock(&(channel->lock));
-        if(sem_wait(&(channel->recv_sem))){
-            printf("Recv Semaphore Failed");
-        }
+        sem_wait(&(channel->recv_sem));
         ret = channel_non_blocking_receive(channel, data);
     }
     return ret;
@@ -73,7 +92,7 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 {
     pthread_mutex_lock(&(channel->lock));
     if (channel->closed){
-        // Sem_post to empty the empty the queue
+        // Sem_post on closed to empty the queue
         if(channel->send_queue){
             channel->send_queue--;
             sem_post(&(channel->send_sem));
@@ -86,7 +105,7 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
         return CHANNEL_FULL;
     }
     else{
-        // If there is queued blocking calls, after this recieve the 
+        // If there is queued blocking calls, after this receive the 
         //  buffer won't be empty and a recieve can execute
         if(channel->recv_queue){
             channel->recv_queue--;
@@ -108,7 +127,7 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
 {
     pthread_mutex_lock(&(channel->lock));
     if (channel->closed){
-        // Sem_post to empty the empty the queue
+        // Sem_post on closed to empty the queue
         if(channel->recv_queue){
             channel->recv_queue--;
             sem_post(&(channel->recv_sem));
@@ -121,7 +140,7 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
         return CHANNEL_EMPTY;
     }
     else{
-        // If there is queued blocking calls, after this recieve the 
+        // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
         if(channel->send_queue){
             channel->send_queue--;
@@ -174,12 +193,14 @@ enum channel_status channel_destroy(channel_t* channel)
 {
     pthread_mutex_lock(&(channel->lock));
     if(channel->closed){
+
         buffer_free(channel->buffer);
         sem_destroy(&(channel->send_sem));
         sem_destroy(&(channel->recv_sem));
         pthread_mutex_unlock(&(channel->lock));
         pthread_mutex_destroy(&(channel->lock));
         free(channel);
+        
         return SUCCESS;
     } 
     else {
