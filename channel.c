@@ -5,6 +5,10 @@
 channel_t* channel_create(size_t size)
 {
     channel_t * new_channel = malloc(sizeof(channel_t));
+    // if(new_channel == NULL){
+    //     printf("create_channel malloc failed");
+    //     return NULL;
+    // }
 
     new_channel->buffer = buffer_create(size);
     pthread_mutex_init(&(new_channel->lock), NULL);
@@ -72,7 +76,7 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
         // Sem_post to empty the empty the queue
         if(channel->send_queue){
             channel->send_queue--;
-            sem_post(&(channel->send_queue));
+            sem_post(&(channel->send_sem));
         }
         pthread_mutex_unlock(&(channel->lock));
         return CLOSED_ERROR;
@@ -84,8 +88,8 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
     else{
         // If there is queued blocking calls, after this recieve the 
         //  buffer won't be empty and a recieve can execute
-        if(channel->recv_sem){
-            channel->recv_sem--;
+        if(channel->recv_queue){
+            channel->recv_queue--;
             sem_post(&(channel->recv_sem));
         }
         buffer_add(channel->buffer, data);
@@ -179,6 +183,7 @@ enum channel_status channel_destroy(channel_t* channel)
         return SUCCESS;
     } 
     else {
+        pthread_mutex_unlock(&(channel->lock));
         return DESTROY_ERROR;
     }
 }
