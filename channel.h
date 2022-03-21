@@ -111,10 +111,24 @@ enum channel_status channel_destroy(channel_t* channel);
 enum channel_status channel_select(select_t* channel_list, size_t channel_count, size_t* selected_index);
 
 //////////////////////////////////////////
-// NOT THREAD SAFE FUNCTIONS
+// FUNCTION POINTERS
 
+typedef enum channel_status (*channel_fn)(channel_t* channel, void* data);
+
+typedef bool (*buffer_status_fn)(buffer_t* buffer);
+
+
+//////////////////////////////////////////
+// THREAD NON-SAFE FUNCTIONS
+
+//////////////////////////////////////////
+// channel_send_unsafe()
+// non-blocking-send without thread safety (no locks)
 enum channel_status channel_send_unsafe(channel_t* channel, void* data);
 
+//////////////////////////////////////////
+// channel_receive_unsafe()
+// non-blocking-receive without thread safety (no locks)
 enum channel_status channel_receive_unsafe(channel_t* channel, void** data);
 
 //////////////////////////////////////////

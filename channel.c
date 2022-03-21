@@ -182,8 +182,40 @@ enum channel_status channel_destroy(channel_t* channel)
 // Additionally, selected_index is set to the index of the channel that generated the error
 enum channel_status channel_select(select_t* channel_list, size_t channel_count, size_t* selected_index)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    int i;
+    bool scanning = true;
+    enum channel_status ret;
+    channel_fn channel_call_unsafe;
+    buffer_status_fn buffer_status;
+
+    // Assign function pointers based off of direction
+    if(channel_list->dir == SEND) {
+        channel_call_unsafe = (void *)&channel_send_unsafe; // Send -> unsafe send
+        buffer_status = (void *)&buffer_full;               // Can't send if buffer is full
+    } else {
+        channel_call_unsafe = (void *)&channel_receive_unsafe;  // Receive -> unsafe receive
+        buffer_status = (void *)&buffer_empty;                  // Can't receive if buffer is empty
+    }
+
+    // Continue scanning channels until valid channel is found
+    // Then, since we already have the channel lock, we can call an unsafe send/receive
+    while(scanning)
+    {
+        for(i = 0; i < channel_count; i++)
+        {
+            pthread_mutex_lock( &(channel_list->channel[i].lock) ); // Lock each channel before accessing shared data
+            if (!buffer_status(channel_list->channel[i].buffer))    // Check if channel is valid
+            {
+                ret = channel_call_unsafe( &(channel_list->channel[i]), channel_list->data );
+                pthread_mutex_unlock( &(channel_list->channel[i].lock) );
+                scanning = false;                                           // Scanning set to false to break while
+                break;                                                      // Break to break for loop
+            }
+            pthread_mutex_unlock( &(channel_list->channel[i].lock) );
+        }
+    }
+    
+    return ret;
 }
 
 
