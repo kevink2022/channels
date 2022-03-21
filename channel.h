@@ -111,6 +111,13 @@ enum channel_status channel_destroy(channel_t* channel);
 enum channel_status channel_select(select_t* channel_list, size_t channel_count, size_t* selected_index);
 
 //////////////////////////////////////////
+// NOT THREAD SAFE FUNCTIONS
+
+enum channel_status channel_send_unsafe(channel_t* channel, void* data);
+
+enum channel_status channel_receive_unsafe(channel_t* channel, void** data);
+
+//////////////////////////////////////////
 // INLINE HELPER FUNCTIONS
 
 //////////////////////////////////////////

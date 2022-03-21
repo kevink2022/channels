@@ -90,31 +90,13 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 {
+    enum channel_status ret;
+    
     pthread_mutex_lock(&(channel->lock));
-    if (channel->closed){
-        // Sem_post on closed to empty the queue
-        if(channel->send_queue){
-            channel->send_queue--;
-            sem_post(&(channel->send_sem));
-        }
-        pthread_mutex_unlock(&(channel->lock));
-        return CLOSED_ERROR;
-    }
-    else if (buffer_full(channel->buffer)){
-        pthread_mutex_unlock(&(channel->lock));
-        return CHANNEL_FULL;
-    }
-    else{
-        // If there is queued blocking calls, after this receive the 
-        //  buffer won't be empty and a recieve can execute
-        if(channel->recv_queue){
-            channel->recv_queue--;
-            sem_post(&(channel->recv_sem));
-        }
-        buffer_add(channel->buffer, data);
-        pthread_mutex_unlock(&(channel->lock));
-        return SUCCESS;
-    }
+    ret = channel_send_unsafe(channel, data);
+    pthread_mutex_unlock(&(channel->lock));
+
+    return ret;
 }
 
 // Reads data from the given channel and stores it in the function's input parameter data (Note that it is a double pointer)
@@ -125,31 +107,13 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_receive(channel_t* channel, void** data)
 {
+    enum channel_status ret;
+    
     pthread_mutex_lock(&(channel->lock));
-    if (channel->closed){
-        // Sem_post on closed to empty the queue
-        if(channel->recv_queue){
-            channel->recv_queue--;
-            sem_post(&(channel->recv_sem));
-        }
-        pthread_mutex_unlock(&(channel->lock));
-        return CLOSED_ERROR;
-    }
-    else if (buffer_empty(channel->buffer)){
-        pthread_mutex_unlock(&(channel->lock));
-        return CHANNEL_EMPTY;
-    }
-    else{
-        // If there is queued blocking calls, after this send the 
-        //  buffer won't be full and a send can execute
-        if(channel->send_queue){
-            channel->send_queue--;
-            sem_post(&(channel->send_sem));
-        }
-        buffer_remove(channel->buffer, data);
-        pthread_mutex_unlock(&(channel->lock));
-        return SUCCESS;
-    }
+    ret = channel_receive_unsafe(channel, data);
+    pthread_mutex_unlock(&(channel->lock));
+
+    return ret;
 }
 
 // Closes the channel and informs all the blocking send/receive/select calls to return with CLOSED_ERROR
@@ -211,7 +175,7 @@ enum channel_status channel_destroy(channel_t* channel)
 
 // Takes an array of channels (channel_list) of type select_t and the array length (channel_count) as inputs
 // This API iterates over the provided list and finds the set of possible channels which can be used to invoke the required operation (send or receive) specified in select_t
-// If multiple options are available, it selects the first option and performs its corresponding action
+// If multiple options are available, it SELECTS THE FIRST OPTION and performs its corresponding action 
 // If no channel is available, the call is blocked and waits till it finds a channel which supports its required operation
 // Once an operation has been successfully performed, select should set selected_index to the index of the channel that performed the operation and then return SUCCESS
 // In the event that a channel is closed or encounters any error, the error should be propagated and returned through select
@@ -220,4 +184,64 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
 {
     /* IMPLEMENT THIS */
     return SUCCESS;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// channel_send_unsafe()
+// The guts of non-blocking sends, not thread safe. This was created so 
+// channel_select() could call a send/recv while it still held the lock.
+enum channel_status channel_send_unsafe(channel_t* channel, void* data){
+    
+    if (channel->closed){
+        // Sem_post on closed to empty the queue
+        if(channel->send_queue){
+            channel->send_queue--;
+            sem_post(&(channel->send_sem));
+        }
+        return CLOSED_ERROR;
+    }
+    else if (buffer_full(channel->buffer)){
+        return CHANNEL_FULL;
+    }
+    else{
+        // If there is queued blocking calls, after this receive the 
+        //  buffer won't be empty and a recieve can execute
+        if(channel->recv_queue){
+            channel->recv_queue--;
+            sem_post(&(channel->recv_sem));
+        }
+        buffer_add(channel->buffer, data);
+        return SUCCESS;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// channel_receive_unsafe()
+// The guts of non-blocking sends, not thread safe. This was created so 
+// channel_select() could call a send/recv while it still held the lock.
+enum channel_status channel_receive_unsafe(channel_t* channel, void** data){
+    
+    if (channel->closed){
+        // Sem_post on closed to empty the queue
+        if(channel->recv_queue){
+            channel->recv_queue--;
+            sem_post(&(channel->recv_sem));
+        }
+        return CLOSED_ERROR;
+    }
+    else if (buffer_empty(channel->buffer)){
+        return CHANNEL_EMPTY;
+    }
+    else{
+        // If there is queued blocking calls, after this send the 
+        //  buffer won't be full and a send can execute
+        if(channel->send_queue){
+            channel->send_queue--;
+            sem_post(&(channel->send_sem));
+        }
+        buffer_remove(channel->buffer, data);
+        return SUCCESS;
+    }
 }
