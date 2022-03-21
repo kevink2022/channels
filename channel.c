@@ -208,6 +208,7 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
             {
                 ret = channel_call_unsafe( &(channel_list->channel[i]), channel_list->data );
                 pthread_mutex_unlock( &(channel_list->channel[i].lock) );
+                *selected_index = i;
                 scanning = false;                                           // Scanning set to false to break while
                 break;                                                      // Break to break for loop
             }
