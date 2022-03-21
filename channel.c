@@ -182,7 +182,7 @@ enum channel_status channel_destroy(channel_t* channel)
 // Additionally, selected_index is set to the index of the channel that generated the error
 enum channel_status channel_select(select_t* channel_list, size_t channel_count, size_t* selected_index)
 {
-    int i;
+    size_t i;
     bool scanning = true;
     enum channel_status ret;
     channel_fn channel_call_unsafe;
