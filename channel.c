@@ -52,16 +52,21 @@ enum channel_status channel_send(channel_t *channel, void* data)
     pthread_mutex_lock(&(channel->lock));
     int ret = channel_unsafe_send(channel, data);
     
-    while(ret == CHANNEL_FULL){
+    if (ret == CHANNEL_FULL){
         // If channel is full, add this send request to the queue.
-        queue_add(send_request )
+        queue_add(send_request);
         pthread_mutex_unlock(&(channel->lock));
-
-        ret = channel_non_blocking_send(channel, data);
+        sem_wait(&(send_request->sem));
+        pthread_mutex_lock( &(send_request->lock));
+        ret = send_request->ret;
+        send_request->instances--;  // Instances should always be 1 in a blocking send/recv, it is meant for select, so I may remove this.
+        if(!send_request->instances){
+            pthread_mutex_unlock( &(send_request->lock));
+            service_request_destroy(send_request);
+        }
     }
-    // This is a while loop and not an if loop to catch one possible condition:
-    //  if the user sends a non-blocking call, it can take the spot of a blocking
-    //  call after it leaves the queue, so it needs to go back into the queue
+    
+    pthread_mutex_unlock(&(channel->lock));
     return ret;
 }
 
@@ -278,4 +283,56 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
         buffer_remove(channel->buffer, data);
         return SUCCESS;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// serve_request()
+// The guts of non-blocking sends, not thread safe. This was created so 
+// channel_select() could call a send/recv while it still held the lock.
+void serve_request(channel_t * channel, list_t queue, enum channel_status * ret ){
+
+    list_node_t * node = queue.head;
+    service_request_t * node_request;
+
+    
+    if(node != NULL){
+
+        pthread_mutex_lock( &(((service_request_t*)node->data)->lock) );
+
+        while (!node_request->valid){
+            
+            node_request = (service_request_t *)node->data;
+            
+            node_request->instances--;
+            if(!node_request->instances){
+                pthread_mutex_unlock( &(node_request->lock) );
+                service_request_destroy(node_request);  // If instances = 0; there is no more danger of a queue refrencing this request, and it can be freed
+            } else {
+                pthread_mutex_unlock( &(node_request->lock) );
+            }
+            
+            queue_remove(queue, node);
+            node = node->next;
+            if (node == NULL){
+                return;
+            }
+            pthread_mutex_lock( &(((service_request_t*)node->data)->lock) );
+
+        }
+
+        // This is a valid node we can serve
+        node_request = (service_request_t *)node->data;
+        
+        if (node_request->direction == SEND){
+            *ret = channel_unsafe_send(channel, node_request->data);
+        } else {
+            *ret = channel_unsafe_receive(channel, node_request->data);
+        }
+
+        sem_post( &(node_request->sem) );
+        pthread_mutex_unlock( &(node_request->lock) );
+    }
+
+    return;
 }
