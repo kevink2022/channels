@@ -56,10 +56,9 @@ typedef struct {
     sem_t               sem;
     enum direction      direction;
     enum channel_status ret;
+    bool                valid;
     int                 index;
     int                 instances;
-    enum direction      direction;
-    bool                valid;
     void              * data;
 
 } service_request_t;
@@ -160,5 +159,15 @@ static inline bool buffer_full(buffer_t* buffer){
 static inline bool buffer_empty(buffer_t* buffer){
     return (0 == buffer->size);
 }
+
+service_request_t * init_service_request(channel_t * channel, enum direction direction, int index, void * data);
+
+void service_request_destroy(void);
+
+void queue_remove(list_t * queue, service_request_t * service_request);
+
+void queue_add(list_t * queue, service_request_t * service_request);
+
+void serve_request(channel_t * channel, list_t * queue);
 
 #endif // CHANNEL_H

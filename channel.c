@@ -47,14 +47,14 @@ channel_t* channel_create(size_t size)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_send(channel_t *channel, void* data)
 {
-    service_request_t * send_request = init_send_request(channel, data, -1);
+    service_request_t * send_request = init_service_request(channel, data, -1);
     
     pthread_mutex_lock(&(channel->lock));
-    int ret = channel_unsafe_send(channel, data);
+    enum channel_status ret = channel_unsafe_send(channel, data);
     
     if (ret == CHANNEL_FULL){
         // If channel is full, add this send request to the queue.
-        queue_add(send_request);
+        queue_add(channel, send_request);
         pthread_mutex_unlock(&(channel->lock));
         sem_wait(&(send_request->sem));
         pthread_mutex_lock( &(send_request->lock));
@@ -78,15 +78,26 @@ enum channel_status channel_send(channel_t *channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
-    int ret = channel_non_blocking_receive(channel, data);
-    while(ret == CHANNEL_FULL){ 
-        pthread_mutex_lock(&(channel->lock));
-        // If channel is full, add this recv request to the queue.
-        channel->recv_queue++;
+    
+    pthread_mutex_lock(&(channel->lock));
+    enum channel_status ret = channel_unsafe_send(channel, data);
+    
+    if (ret == CHANNEL_FULL){
+        // If channel is full, add this send request to the queue.
+        service_request_t * send_request = init_service_request(channel, SEND, -1, data);
+        queue_add(send_request);
         pthread_mutex_unlock(&(channel->lock));
-        sem_wait(&(channel->recv_sem));
-        ret = channel_non_blocking_receive(channel, data);
+        sem_wait(&(send_request->sem));
+        pthread_mutex_lock( &(send_request->lock));
+        ret = send_request->ret;
+        send_request->instances--;  // Instances should always be 1 in a blocking send/recv, it is meant for select, so I may remove this.
+        if(!send_request->instances){
+            pthread_mutex_unlock( &(send_request->lock));
+            service_request_destroy(send_request);
+        }
     }
+    
+    pthread_mutex_unlock(&(channel->lock));
     return ret;
 }
 
@@ -235,9 +246,8 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
     
     if (channel->closed){
         // Sem_post on closed to empty the queue
-        if(channel->send_queue){
-            channel->send_queue--;
-            sem_post(&(channel->send_sem));
+        if(channel->send_queue.count){
+            serve_request(channel, &channel->send_queue);
         }
         return CLOSED_ERROR;
     }
@@ -245,13 +255,12 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
         return CHANNEL_FULL;
     }
     else{
+        buffer_add(channel->buffer, data);
         // If there is queued blocking calls, after this receive the 
         //  buffer won't be empty and a recieve can execute
-        if(channel->recv_queue){
-            channel->recv_queue--;
-            sem_post(&(channel->recv_sem));
+        if(channel->recv_queue.count){
+            serve_request(channel, &channel->recv_queue);
         }
-        buffer_add(channel->buffer, data);
         return SUCCESS;
     }
 }
@@ -264,9 +273,8 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     
     if (channel->closed){
         // Sem_post on closed to empty the queue
-        if(channel->recv_queue){
-            channel->recv_queue--;
-            sem_post(&(channel->recv_sem));
+        if(channel->recv_queue.count){
+            serve_request(channel, &channel->recv_queue);
         }
         return CLOSED_ERROR;
     }
@@ -276,9 +284,8 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     else{
         // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
-        if(channel->send_queue){
-            channel->send_queue--;
-            sem_post(&(channel->send_sem));
+        if(channel->send_queue.count){
+            serve_request(channel, &channel->send_queue);
         }
         buffer_remove(channel->buffer, data);
         return SUCCESS;
@@ -290,11 +297,10 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
 // serve_request()
 // The guts of non-blocking sends, not thread safe. This was created so 
 // channel_select() could call a send/recv while it still held the lock.
-void serve_request(channel_t * channel, list_t queue, enum channel_status * ret ){
+void serve_request(channel_t * channel, list_t * queue){
 
-    list_node_t * node = queue.head;
+    list_node_t * node = queue->head;
     service_request_t * node_request;
-
     
     if(node != NULL){
 
@@ -335,4 +341,23 @@ void serve_request(channel_t * channel, list_t queue, enum channel_status * ret 
     }
 
     return;
+}
+
+
+
+service_request_t * init_service_request(channel_t * channel, enum direction direction, int index, void * data){
+
+    service_request_t * service_request = malloc(sizeof(service_request_t));
+
+    pthread_mutex_init(&(service_request->lock), NULL);
+    sem_init(&(service_request->sem), 0, 1);
+    service_request->direction = direction;
+    service_request->valid = true;
+    service_request->ret = GEN_ERROR; //If this isn't changed, its an error, so I'm initializing it as an error
+    service_request->index = index;
+    service_request->instances = 0;
+    service_request->valid = true;
+    service_request->data = data;
+
+    return service_request;
 }
