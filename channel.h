@@ -28,7 +28,9 @@ typedef struct {
     buffer_t*           buffer;
 
     //
-    pthread_mutex_t     lock;  
+    pthread_mutex_t     lock;
+    pthread_mutex_t     send_queue_lock;
+    pthread_mutex_t     recv_queue_lock;  
     list_t            * recv_queue;     // Tracks how many blocking recieve calls are queued    
     list_t            * send_queue;     // Tracks how many blocking send calls are queued
     bool                closed; 
@@ -57,11 +59,18 @@ typedef struct {
     enum direction      direction;
     enum channel_status ret;
     bool                valid;
-    int                 index;
     int                 instances;
+    int               * selected_index;
     void              * data;
 
 } service_request_t;
+
+typedef struct {
+
+    int                 index;
+    service_request_t * service_request;
+
+} channel_request_t;
 
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
@@ -160,13 +169,15 @@ static inline bool buffer_empty(buffer_t* buffer){
     return (0 == buffer->size);
 }
 
-service_request_t * init_service_request(enum direction direction, int index, void * data);
+service_request_t * init_service_request(enum direction direction, void * data, int * selected_index);
 
 void service_request_destroy(service_request_t *service_request);
 
-list_node_t * queue_remove(list_t * queue, list_node_t * node);
+channel_request_t *  queue_remove(list_t * queue, channel_request_t * channel_request);
 
-void queue_add(list_t * queue, service_request_t * service_request);
+void queue_add(list_t * queue, service_request_t * service_request, int index);
+
+channel_request_t * queue_first(list_t * queue);
 
 void serve_request(channel_t * channel, list_t * queue);
 

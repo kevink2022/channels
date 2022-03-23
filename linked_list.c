@@ -55,11 +55,18 @@ list_node_t* list_next(list_node_t* node)
 
 // Finds the first node in the list with the given data
 // Returns NULL if data could not be found
-// list_node_t* list_find(list_t* list, void* data)
-// {
-//     /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-//     return NULL;
-// }
+list_node_t* list_find(list_t* list, void* data)
+{
+    list_node_t * node = list->head;
+    
+    while(node != NULL){
+        if (node->data == data){
+            return node;
+        }
+        node = node->next;
+    }
+    return NULL;
+}
 
 // Inserts a new node in the list with the given data
 // New nodes are inserted at the tail for a quick FIFO design
