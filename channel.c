@@ -36,6 +36,8 @@
  * 
  */
 
+#define DEBUG
+
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)
@@ -62,10 +64,11 @@ channel_t* channel_create(size_t size)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_send(channel_t *channel, void* data)
 {
-    pthread_mutex_lock(&(channel->lock));
-    enum channel_status ret = channel_unsafe_send(channel, data);
+    
+    enum channel_status ret = channel_non_blocking_send(channel, data);
     
     if (ret == CHANNEL_FULL){
+        pthread_mutex_lock(&(channel->lock));
         // If channel is full, add this send request to the queue.
         service_request_t * send_request = init_service_request(SEND, data, NULL, &ret);
 
@@ -97,10 +100,29 @@ enum channel_status channel_send(channel_t *channel, void* data)
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
     
-    pthread_mutex_lock(&(channel->lock));
-    enum channel_status ret = channel_unsafe_receive(channel, data);
-    pthread_mutex_unlock(&(channel->lock));
+    enum channel_status ret = channel_non_blocking_receive(channel, data);
     
+    if (ret == CHANNEL_EMPTY){
+        pthread_mutex_lock(&(channel->lock));
+        // If channel is full, add this send request to the queue.
+        service_request_t * recv_request = init_service_request(RECV, data, NULL, &ret);
+
+        pthread_mutex_lock(&(channel->recv_queue_lock));
+
+        queue_add(channel->send_queue, recv_request, -1);
+
+        pthread_mutex_unlock(&(channel->recv_queue_lock));
+        pthread_mutex_unlock(&(channel->lock));
+        
+        sem_wait(&(recv_request->sem));
+    }
+
+    #ifdef DEBUG
+    if (ret == CHANNEL_EMPTY) {
+        printf("Blocking send returning channel empty!");
+    }
+    #endif
+
     return ret;
 }
 
@@ -116,6 +138,14 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
     
     pthread_mutex_lock(&(channel->lock));
     ret = channel_unsafe_send(channel, data);
+
+
+    //  buffer won't be empty and a recieve can execute
+    if(channel->recv_queue->count)
+    {
+        serve_request(channel, channel->recv_queue);
+    }
+
     pthread_mutex_unlock(&(channel->lock));
 
     return ret;
@@ -133,6 +163,13 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
     
     pthread_mutex_lock(&(channel->lock));
     ret = channel_unsafe_receive(channel, data);
+
+    // If there is queued blocking calls, after this send the 
+    //  buffer won't be full and a send can execute
+    if(channel->send_queue->count){
+        serve_request(channel, channel->send_queue);
+    }
+
     pthread_mutex_unlock(&(channel->lock));
 
     return ret;
@@ -144,23 +181,17 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
 // channel_select() could call a send/recv while it still held the lock.
 enum channel_status channel_unsafe_send(channel_t* channel, void* data){
     
-    if (channel->closed){
-        // Sem_post on closed to empty the queue
-        if(channel->send_queue->count){
-            serve_request(channel, channel->send_queue);
-        }
+    if (channel->closed)
+    {
         return CLOSED_ERROR;
     }
-    else if (buffer_full(channel->buffer)){
+    else if (buffer_full(channel->buffer))
+    {
         return CHANNEL_FULL;
     }
-    else{
+    else
+    {
         buffer_add(channel->buffer, data);
-        // If there is queued blocking calls, after this receive the 
-        //  buffer won't be empty and a recieve can execute
-        if(channel->recv_queue->count){
-            serve_request(channel, channel->recv_queue);
-        }
         return SUCCESS;
     }
 }
@@ -171,23 +202,17 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
 // channel_select() could call a send/recv while it still held the lock.
 enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     
-    if (channel->closed){
-        // Sem_post on closed to empty the queue
-        if(channel->recv_queue->count){
-            serve_request(channel, channel->recv_queue);
-        }
+    if (channel->closed)
+    {
         return CLOSED_ERROR;
     }
-    else if (buffer_empty(channel->buffer)){
+    else if (buffer_empty(channel->buffer))
+    {
         return CHANNEL_EMPTY;
     }
-    else{
+    else
+    {
         buffer_remove(channel->buffer, data);
-        // If there is queued blocking calls, after this send the 
-        //  buffer won't be full and a send can execute
-        if(channel->send_queue->count){
-            serve_request(channel, channel->send_queue);
-        }
         return SUCCESS;
     }
 }
@@ -233,6 +258,10 @@ enum channel_status channel_destroy(channel_t* channel)
     if(channel->closed){
 
         buffer_free(channel->buffer);
+        list_destroy(channel->recv_queue);
+        list_destroy(channel->send_queue);
+        pthread_mutex_destroy(&(channel->send_queue_lock));
+        pthread_mutex_destroy(&(channel->recv_queue_lock));
         pthread_mutex_unlock(&(channel->lock));
         pthread_mutex_destroy(&(channel->lock));
         free(channel);
