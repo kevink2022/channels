@@ -22,7 +22,7 @@
  * All this is subject to change when I implement select, and possibly unbuffered.
  */
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 
@@ -124,7 +124,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 
         pthread_mutex_lock(&(channel->lock));
         
-        queue_add(channel->send_queue, recv_request);
+        queue_add(channel->recv_queue, recv_request);
         
         pthread_mutex_unlock(&(channel->lock));
         
@@ -368,51 +368,51 @@ void queue_remove(list_t * queue, queue_entry_t * entry){
     list_remove(queue, list_find(queue, entry));
 }
 
-void print_channel(channel_t * channel){
-    list_node_t * node;
-    queue_entry_t * entry;
-    request_t * request;
-    int i;
+// void print_channel(channel_t * channel){
+//     list_node_t * node;
+//     queue_entry_t * entry;
+//     request_t * request;
+//     int i;
     
-    printf("\n\n************CHANNEL INFORMATION************\n");
+//     printf("\n\n************CHANNEL INFORMATION************\n");
     
-    // Print buffer information
-    printf("\nBUFFER INFO\n Size:          %lu\n Capacity:      %lu\n", channel->buffer->size, channel->buffer->capacity);
+//     // Print buffer information
+//     printf("\nBUFFER INFO\n Size:          %lu\n Capacity:      %lu\n", channel->buffer->size, channel->buffer->capacity);
 
-    // Print send queue information
-    printf("\nSEND QUEUE\n Count: %lu\n", channel->send_queue->count);
-    i = 0;
-    node = channel->send_queue->head;
-    while(entry != NULL){
-        printf("\nENTRY %i\n", i);
-        entry = (queue_entry_t *)node->data;
-        printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
+//     // Print send queue information
+//     printf("\nSEND QUEUE\n Count: %lu\n", channel->send_queue->count);
+//     i = 0;
+//     node = channel->send_queue->head;
+//     while(entry != NULL){
+//         printf("\nENTRY %i\n", i);
+//         entry = (queue_entry_t *)node->data;
+//         printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
         
-        request = entry->request;
-        printf("\nREQUEST\n");
+//         request = entry->request;
+//         printf("\nREQUEST\n");
 
-        printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
-        i++;
-        node = node->next;
-    }
+//         printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
+//         i++;
+//         node = node->next;
+//     }
 
-    // Print receive queue information
-    printf("\nRECV QUEUE\n Count: %lu\n", channel->recv_queue->count);
-    i = 0;
-    node = channel->recv_queue->head;
-    while(entry != NULL){
-        printf("\nENTRY %i\n", i);
-        entry = (queue_entry_t *)node->data;
-        printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
+//     // Print receive queue information
+//     printf("\nRECV QUEUE\n Count: %lu\n", channel->recv_queue->count);
+//     i = 0;
+//     node = channel->recv_queue->head;
+//     while(entry != NULL){
+//         printf("\nENTRY %i\n", i);
+//         entry = (queue_entry_t *)node->data;
+//         printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
         
-        request = entry->request;
-        printf("\nREQUEST\n");
+//         request = entry->request;
+//         printf("\nREQUEST\n");
 
-        printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
-        i++;
-        node = node->next;
-    }
-}
+//         printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
+//         i++;
+//         node = node->next;
+//     }
+// }
 
 
 
