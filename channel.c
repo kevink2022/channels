@@ -292,13 +292,13 @@ void serve_request(channel_t * channel, list_t * queue){
     if(channel_request != NULL){
         
         if(service_request->selected_index != NULL) {   // If the caller provided a place for the selected index (select)
-            service_request->selected_index = channel_request->index;
+            *service_request->selected_index = channel_request->index;
         }
         
-        if(service_request->direction = SEND){
+        if(service_request->direction == SEND){
             *service_request->ret = channel_unsafe_send(channel, service_request->data);
         } else {
-            *service_request->ret = channel_unsafe_recv(channel, service_request->data);
+            *service_request->ret = channel_unsafe_receive(channel, service_request->data);
         }
 
         if (*service_request->ret != CLOSED_ERROR){     // Keep the request valid on CLOSED_ERROR, incase there is another 
@@ -367,8 +367,8 @@ channel_request_t *  queue_remove(list_t * queue, channel_request_t * channel_re
     pthread_mutex_lock( &(channel_request->service_request->lock) );
     
     channel_request->service_request->instances--;
-    if (channel_request->service_request->instances = 0){
-        service_request_destroy(service_request_destroy);
+    if (channel_request->service_request->instances == 0){
+        service_request_destroy(channel_request->service_request);
     } else {
         pthread_mutex_unlock( &(channel_request->service_request->lock) );
     }
