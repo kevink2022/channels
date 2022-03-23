@@ -22,16 +22,9 @@
  * All this is subject to change when I implement select, and possibly unbuffered.
  */
 
-//#define DEBUG
+#define DEBUG
 
-#ifdef DEBUG
 
-int B_send = 0;
-int NB_send = 0;
-int B_recv = 0;
-int NB_recv = 0;
-
-#endif
 
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
@@ -125,6 +118,11 @@ enum channel_status channel_receive(channel_t* channel, void** data)
         pthread_mutex_lock(&(channel->lock));
         
         queue_add(channel->recv_queue, recv_request);
+
+        #ifdef DEBUG
+        print_channel(channel);
+        printf("\nCHANNEL RECV: Requested\n");
+        #endif
         
         pthread_mutex_unlock(&(channel->lock));
         
@@ -133,6 +131,10 @@ enum channel_status channel_receive(channel_t* channel, void** data)
         ret = channel_non_blocking_receive(channel, data);
 
         destroy_request(recv_request);
+
+        #ifdef DEBUG
+        printf("\nCHANNEL RECV: Request answered\n");
+        #endif
     }
 
     #ifdef DEBUG
@@ -152,10 +154,20 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 {
     enum channel_status ret;
+
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL NB SEND: Begin");
+    #endif
     
     pthread_mutex_lock(&(channel->lock));
     ret = channel_unsafe_send(channel, data);
     pthread_mutex_unlock(&(channel->lock));
+
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL NB SEND: Exit\n ret: %i\n", ret);
+    #endif
 
     return ret;
 }
@@ -169,10 +181,20 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 enum channel_status channel_non_blocking_receive(channel_t* channel, void** data)
 {
     enum channel_status ret;
+
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL NB RECV: Begin");
+    #endif
     
     pthread_mutex_lock(&(channel->lock));
     ret = channel_unsafe_receive(channel, data);
     pthread_mutex_unlock(&(channel->lock));
+
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL NB RECV: Exit\n ret: %i\n", ret);
+    #endif
 
     return ret;
 }
@@ -198,7 +220,18 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
         // If there is queued blocking calls, after this receive the 
         //  buffer won't be empty and a recieve can execute
         if(channel->recv_queue->count){
+
+            #ifdef DEBUG
+            print_channel(channel);
+            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() before");
+            #endif
+
             queue_serve(channel->recv_queue);
+
+            #ifdef DEBUG
+            print_channel(channel);
+            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() after");
+            #endif
         }
 
         return SUCCESS;
@@ -226,7 +259,20 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
         // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
         if(channel->send_queue->count){
+            
+            #ifdef DEBUG
+            print_channel(channel);
+            printf("\nCHANNEL UNSAFE RECV: send queue_serve() before");
+            #endif
+            
             queue_serve(channel->send_queue);
+        
+            #ifdef DEBUG
+            print_channel(channel);
+            printf("\nCHANNEL UNSAFE RECV: send queue_serve() after");
+            #endif
+    
+        
         }
         return SUCCESS;
     }
