@@ -22,6 +22,17 @@
  * All this is subject to change when I implement select, and possibly unbuffered.
  */
 
+#define DEBUG
+
+#ifdef DEBUG
+
+int B_send = 0;
+int NB_send = 0;
+int B_recv = 0;
+int NB_recv = 0;
+
+#endif
+
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)
@@ -33,6 +44,12 @@ channel_t* channel_create(size_t size)
     new_channel->recv_queue = list_create();
     new_channel->send_queue = list_create();
     new_channel->closed = false;
+
+    #ifdef DEBUG
+
+    printf("\nChannel Created\n");
+
+    #endif
 
     return new_channel;
 }
@@ -48,12 +65,22 @@ enum channel_status channel_send(channel_t *channel, void* data)
     request_t * send_request;
     enum channel_status ret = channel_non_blocking_send(channel, data);
 
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL SEND: Initial Attempt\n ret: %i\n", ret);
+    #endif
+
     if(ret == CHANNEL_FULL){
         send_request = init_request();
         
         pthread_mutex_lock(&(channel->lock));
         
         queue_add(channel->send_queue, send_request);
+
+        #ifdef DEBUG
+        print_channel(channel);
+        printf("\nCHANNEL SEND: Requested\n");
+        #endif
 
         pthread_mutex_unlock(&(channel->lock));
 
@@ -62,10 +89,17 @@ enum channel_status channel_send(channel_t *channel, void* data)
         ret = channel_non_blocking_send(channel, data);
 
         destroy_request(send_request);
+
+        #ifdef DEBUG
+        printf("\nCHANNEL SEND: Request answered\n");
+        #endif
     }
-    // This is a while loop and not an if loop to catch one possible condition:
-    //  if the user sends a non-blocking call, it can take the spot of a blocking
-    //  call after it leaves the queue, so it needs to go back into the queue
+    
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL SEND: Exit\n ret: %i\n", ret);
+    #endif
+
     return ret;
 }
 
@@ -79,6 +113,11 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 {
     request_t * recv_request;
     enum channel_status ret = channel_non_blocking_receive(channel, data);
+
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL RECV: Initial Attempt\n ret: %i\n", ret);
+    #endif
 
     if(ret == CHANNEL_EMPTY){ 
         recv_request = init_request();
@@ -96,6 +135,10 @@ enum channel_status channel_receive(channel_t* channel, void** data)
         destroy_request(recv_request);
     }
 
+    #ifdef DEBUG
+    print_channel(channel);
+    printf("\nCHANNEL RECV: Exit\n ret: %i\n", ret);
+    #endif
 
     return ret;
 }
@@ -323,6 +366,52 @@ void queue_remove(list_t * queue, queue_entry_t * entry){
     // }
 
     list_remove(queue, list_find(queue, entry));
+}
+
+void print_channel(channel_t * channel){
+    list_node_t * node;
+    queue_entry_t * entry;
+    request_t * request;
+    int i;
+    
+    printf("\n\n************CHANNEL INFORMATION************\n");
+    
+    // Print buffer information
+    printf("\nBUFFER INFO\n Size:          %lu\n Capacity:      %lu\n", channel->buffer->size, channel->buffer->capacity);
+
+    // Print send queue information
+    printf("\nSEND QUEUE\n Count: %lu\n", channel->send_queue->count);
+    i = 0;
+    node = channel->send_queue->head;
+    while(entry != NULL){
+        printf("\nENTRY %i\n", i);
+        entry = (queue_entry_t *)node->data;
+        printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
+        
+        request = entry->request;
+        printf("\nREQUEST\n");
+
+        printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
+        i++;
+        node = node->next;
+    }
+
+    // Print receive queue information
+    printf("\nRECV QUEUE\n Count: %lu\n", channel->recv_queue->count);
+    i = 0;
+    node = channel->recv_queue->head;
+    while(entry != NULL){
+        printf("\nENTRY %i\n", i);
+        entry = (queue_entry_t *)node->data;
+        printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
+        
+        request = entry->request;
+        printf("\nREQUEST\n");
+
+        printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
+        i++;
+        node = node->next;
+    }
 }
 
 
