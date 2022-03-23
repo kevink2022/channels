@@ -28,14 +28,14 @@ list_node_t* list_begin(list_t* list);
 list_node_t* list_next(list_node_t* node);
 
 // Returns data in the given list node
-void* list_data(list_node_t* node);
+// void* list_data(list_node_t* node);
 
 // Returns the number of elements in the list
-size_t list_count(list_t* list);
+// size_t list_count(list_t* list);
 
-// Finds the first node in the list with the given data
-// Returns NULL if data could not be found
-list_node_t* list_find(list_t* list, void* data);
+// // Finds the first node in the list with the given data
+// // Returns NULL if data could not be found
+// list_node_t* list_find(list_t* list, void* data);
 
 // Inserts a new node in the list with the given data
 void list_insert(list_t* list, void* data);
@@ -44,6 +44,6 @@ void list_insert(list_t* list, void* data);
 void list_remove(list_t* list, list_node_t* node);
 
 // Executes a function for each element in the list
-void list_foreach(list_t* list, void (*func)(void* data));
+// void list_foreach(list_t* list, void (*func)(void* data));
 
 #endif // LINKED_LIST_H
