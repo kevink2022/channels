@@ -437,7 +437,7 @@ void print_channel(channel_t * channel){
         request = entry->request;
         printf("\nREQUEST\n");
 
-        printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
+        printf(" Location:      %lx\n Sem:           %lx", (u_long)request, (u_long)&request->sem);
         i++;
         node = node->next;
     }
@@ -454,7 +454,7 @@ void print_channel(channel_t * channel){
         request = entry->request;
         printf("\nREQUEST\n");
 
-        printf(" Location:      %lx\n Sem:           %lx", request, &request->sem);
+        printf(" Location:      %lx\n Sem:           %lx", (u_long)request, (u_long)&request->sem);
         i++;
         node = node->next;
     }
