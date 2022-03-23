@@ -72,7 +72,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
 
         #ifdef DEBUG
         print_channel(channel);
-        printf("\nCHANNEL SEND: Requested\n");
+        printf("\nCHANNEL SEND: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)send_request, (u_long)&send_request->sem);
         #endif
 
         pthread_mutex_unlock(&(channel->lock));
@@ -121,7 +121,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 
         #ifdef DEBUG
         print_channel(channel);
-        printf("\nCHANNEL RECV: Requested\n");
+        printf("\nCHANNEL RECV: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)recv_request, (u_long)&recv_request->sem);
         #endif
         
         pthread_mutex_unlock(&(channel->lock));
@@ -429,7 +429,7 @@ void print_channel(channel_t * channel){
     printf("\nSEND QUEUE\n Count: %lu\n", channel->send_queue->count);
     i = 0;
     node = channel->send_queue->head;
-    while(entry != NULL){
+    while(node != NULL){
         printf("\nENTRY %i\n", i);
         entry = (queue_entry_t *)node->data;
         printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
@@ -446,7 +446,7 @@ void print_channel(channel_t * channel){
     printf("\nRECV QUEUE\n Count: %lu\n", channel->recv_queue->count);
     i = 0;
     node = channel->recv_queue->head;
-    while(entry != NULL){
+    while(node != NULL){
         printf("\nENTRY %i\n", i);
         entry = (queue_entry_t *)node->data;
         printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
@@ -458,6 +458,8 @@ void print_channel(channel_t * channel){
         i++;
         node = node->next;
     }
+    printf("\n************CHANNEL INFORMATION************\n\n");
+
 }
 
 
