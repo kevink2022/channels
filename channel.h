@@ -183,4 +183,6 @@ void serve_request(channel_t * channel, list_t * queue);
 
 void clean_request_queue(list_t * queue);
 
+void print_channel_status(channel_t * channel);
+
 #endif // CHANNEL_H

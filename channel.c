@@ -67,7 +67,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
     
     enum channel_status ret = channel_non_blocking_send(channel, data);
     
-    if (ret == CHANNEL_FULL){
+    while (ret == CHANNEL_FULL){
         pthread_mutex_lock(&(channel->lock));
         // If channel is full, add this send request to the queue.
         service_request_t * send_request = init_service_request(SEND, data, NULL, &ret);
@@ -76,15 +76,27 @@ enum channel_status channel_send(channel_t *channel, void* data)
 
         queue_add(channel->send_queue, send_request, -1);
 
+        #ifdef DEBUG
+        printf("channel_send() added to queue\n");
+        print_channel_status(channel);
+        #endif
+
         pthread_mutex_unlock(&(channel->send_queue_lock));
         pthread_mutex_unlock(&(channel->lock));
         
         sem_wait(&(send_request->sem));
+
+        ret = channel_non_blocking_send(channel, data);
+
+        #ifdef DEBUG
+        printf("channel_send() after sem wait\n, ret: %i", ret);
+        print_channel_status(channel);
+        #endif
     }
 
     #ifdef DEBUG
     if (ret == CHANNEL_FULL) {
-        printf("Blocking send returning channel full!");
+        printf("Blocking send returning channel full!\n");
     }
     #endif
 
@@ -102,7 +114,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     
     enum channel_status ret = channel_non_blocking_receive(channel, data);
     
-    if (ret == CHANNEL_EMPTY){
+    while (ret == CHANNEL_EMPTY){
         pthread_mutex_lock(&(channel->lock));
         // If channel is full, add this send request to the queue.
         service_request_t * recv_request = init_service_request(RECV, data, NULL, &ret);
@@ -113,13 +125,25 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 
         pthread_mutex_unlock(&(channel->recv_queue_lock));
         pthread_mutex_unlock(&(channel->lock));
+
+        #ifdef DEBUG
+        printf("channel_receive() added to queue\n");
+        print_channel_status(channel);
+        #endif
         
         sem_wait(&(recv_request->sem));
+
+        ret = channel_non_blocking_receive(channel, data);
+
+        #ifdef DEBUG
+        printf("channel_receive() after sem wait\n, ret: %i", ret);
+        print_channel_status(channel);
+        #endif
     }
 
     #ifdef DEBUG
     if (ret == CHANNEL_EMPTY) {
-        printf("Blocking send returning channel empty!");
+        printf("Blocking send returning channel empty!\n");
     }
     #endif
 
@@ -141,7 +165,7 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 
 
     //  buffer won't be empty and a recieve can execute
-    if(channel->recv_queue->count)
+    if(ret == SUCCESS && channel->recv_queue->count)
     {
         serve_request(channel, channel->recv_queue);
     }
@@ -166,7 +190,7 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
 
     // If there is queued blocking calls, after this send the 
     //  buffer won't be full and a send can execute
-    if(channel->send_queue->count){
+    if(ret == SUCCESS && channel->send_queue->count){
         serve_request(channel, channel->send_queue);
     }
 
@@ -229,8 +253,6 @@ enum channel_status channel_close(channel_t* channel)
     pthread_mutex_lock(&(channel->lock));
     if(!channel->closed){
         channel->closed = true;
-        // By doing a sem_post for each semiphore, both queues wills start emptying,
-        //  all returning CLOSED_ERROR
         if(channel->recv_queue->count){
             clean_request_queue(channel->recv_queue);
         }
@@ -298,6 +320,11 @@ void serve_request(channel_t * channel, list_t * queue){
     channel_request_t * channel_request = queue_first(queue);
     service_request_t * service_request;
 
+    #ifdef DEBUG
+    printf("serve_request() before\n");
+    print_channel_status(channel);
+    #endif
+
     while(channel_request != NULL){
 
         service_request = channel_request->service_request;
@@ -324,23 +351,27 @@ void serve_request(channel_t * channel, list_t * queue){
             *service_request->selected_index = channel_request->index;
         }
         
-        if(service_request->direction == SEND){
-            *service_request->ret = channel_unsafe_send(channel, service_request->data);
-        } else {
-            *service_request->ret = channel_unsafe_receive(channel, service_request->data);
-        }
+        // if(service_request->direction == SEND){
+        //     *service_request->ret = channel_unsafe_send(channel, service_request->data);
+        // } else {
+        //     *service_request->ret = channel_unsafe_receive(channel, service_request->data);
+        // }
 
-        if (*service_request->ret != CLOSED_ERROR){     // Keep the request valid on CLOSED_ERROR, incase there is another 
-            service_request->valid = false;             // channel still open to fufill the request.
-        }
+        // if (*service_request->ret != CLOSED_ERROR){     // Keep the request valid on CLOSED_ERROR, incase there is another 
+        //     service_request->valid = false;             // channel still open to fufill the request.
+        // }
 
-        #ifdef DEBUG
-        if (*service_request->ret == CHANNEL_EMPTY){            // This should never happen, as the algorithm is designed to
-            printf("Serve request returned CHANNEL_EMPTY");     // Only call a serve request when 1) there is a queue and 2) 
-        } else if (*service_request->ret == CHANNEL_FULL){      // a message was just sent/recieved, so one message in the queue
-            printf("Serve request returned CHANNEL_FULL");      // can be processed.
-        }
-        #endif
+        // #ifdef DEBUG
+        // printf("serve_request() returned %i\n", *service_request->ret);
+        // #endif
+
+        // #ifdef DEBUG
+        // if (*service_request->ret == CHANNEL_EMPTY){            // This should never happen, as the algorithm is designed to
+        //     printf("Serve request returned CHANNEL_EMPTY");     // Only call a serve request when 1) there is a queue and 2) 
+        // } else if (*service_request->ret == CHANNEL_FULL){      // a message was just sent/recieved, so one message in the queue
+        //     printf("Serve request returned CHANNEL_FULL");      // can be processed.
+        // }
+        // #endif
 
         sem_post( &(service_request->sem) );    // Wake the thread waiting on the request
 
@@ -349,6 +380,11 @@ void serve_request(channel_t * channel, list_t * queue){
         queue_remove(queue, channel_request);
     }
     
+    #ifdef DEBUG
+    printf("serve_request() after\n");
+    print_channel_status(channel);
+    #endif
+
     return; 
 }
 
@@ -360,7 +396,7 @@ service_request_t * init_service_request(enum direction direction, void * data, 
     service_request_t * service_request = malloc(sizeof(service_request_t));
 
     pthread_mutex_init(&(service_request->lock), NULL);
-    sem_init(&(service_request->sem), 0, 1);
+    sem_init(&(service_request->sem), 0, 0);
     service_request->direction      = direction;        // Send or recv
     service_request->valid          = true;             // True if the request hasn't been served, false if it already has
     service_request->instances      = 0;                // How many queues this request is in, so the last queue can destroy it
@@ -441,6 +477,10 @@ void clean_request_queue(list_t * queue){
     channel_request_t * channel_request = queue_first(queue);
     service_request_t * service_request;
 
+    #ifdef DEBUG
+    printf("clean_request_queue() before\n");
+    #endif
+
     while(channel_request != NULL){
 
         service_request = channel_request->service_request;
@@ -456,4 +496,57 @@ void clean_request_queue(list_t * queue){
 
         channel_request = queue_remove(queue, channel_request);
     }
+
+    #ifdef DEBUG
+    printf("clean_request_queue() after\n");
+    #endif
+    return;
 }
+
+
+
+#ifdef DEBUG
+
+// Assumes channel lock is held
+// Visualize changes to isolate steps where things go wrong
+void print_channel_status(channel_t * channel){
+
+    list_node_t * node;
+    channel_request_t * channel_request;
+    service_request_t * service_request;
+    int i;
+    
+    printf("\n\n************CHANNEL INFORMATION************\n");
+    
+    // Print buffer information
+    printf("\nBUFFER INFO\n Size:          %lu\n Capacity:      %lu\n", channel->buffer->size, channel->buffer->capacity);
+
+    // Print send queue information
+    printf("\nSEND QUEUE\n Count: %lu\n", channel->send_queue->count);
+    i = 0;
+    node = channel->send_queue->head;
+    while(node != NULL){
+        printf("\nNODE %i\n", i);
+        channel_request = (channel_request_t*)node->data;
+        printf(" Channel Req:   %lx\n Index:         %i\n SR_Location:   %lx\n", (u_long)channel_request, channel_request->index, (u_long)channel_request->service_request);
+        service_request = (service_request_t*)channel_request->service_request;
+        printf("Service Req \n Direction:     %i\n Valid:         %i\n Instances:     %i\n", service_request->direction, service_request->valid, service_request->instances);
+        i++;
+        node = node->next;
+    }
+
+    // Print receive queue information
+    printf("\nRECV QUEUE\n Count: %lu\n", channel->recv_queue->count);
+    i = 0;
+    node = channel->recv_queue->head;
+    while(node != NULL){
+        channel_request = (channel_request_t*)node->data;
+        service_request = (service_request_t*)channel_request->service_request;
+        printf("\nNODE %i\n Channel Req:   %lx\n Index:         %i\n SR_Location:   %lx\n", i, (u_long)channel_request, channel_request->index, (u_long)channel_request->service_request);
+        printf("Service Req \n Direction:     %i\n Valid:         %i\n Instances:     %i\n", service_request->direction, service_request->valid, service_request->instances);
+        i++;
+        node = node->next;
+    }
+}
+
+#endif
