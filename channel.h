@@ -54,14 +54,14 @@ typedef struct {
 
 typedef struct {
 
-    pthread_mutex_t     lock;  
-    sem_t               sem;
-    enum direction      direction;
-    enum channel_status ret;
-    bool                valid;
-    int                 instances;
-    int               * selected_index;
-    void              * data;
+    pthread_mutex_t       lock;  
+    sem_t                 sem;
+    enum direction        direction;
+    bool                  valid;
+    int                   instances;
+    enum channel_status * ret;
+    int                 * selected_index;
+    void                * data;
 
 } service_request_t;
 
@@ -169,7 +169,7 @@ static inline bool buffer_empty(buffer_t* buffer){
     return (0 == buffer->size);
 }
 
-service_request_t * init_service_request(enum direction direction, void * data, int * selected_index);
+service_request_t * init_service_request(enum direction direction, void * data, int * selected_index, enum channel_status * ret);
 
 void service_request_destroy(service_request_t *service_request);
 
