@@ -16,7 +16,6 @@ list_t* list_create()
 // never actually run, but am writing it anyway
 void list_destroy(list_t* list)
 {
-    int i;
     list_node_t * node = list->head;
 
     while (list->count) {
@@ -29,13 +28,13 @@ void list_destroy(list_t* list)
 }
 
 // Returns beginning of the list
-static inline list_node_t* list_begin(list_t* list)
+list_node_t* list_begin(list_t* list)
 {
     return list->head;
 }
 
 // Returns next element in the list
-static inline list_node_t* list_next(list_node_t* node)
+list_node_t* list_next(list_node_t* node)
 {
     return node->next;
 }
@@ -71,7 +70,7 @@ void list_insert(list_t* list, void* data)
     list_node_t * new_node = malloc(sizeof(list_node_t));
     new_node->next = NULL;
     
-    if (list->tail = NULL){ 
+    if (list->tail == NULL){ 
         list->head = new_node;
         new_node->prev = NULL;
     } else {
