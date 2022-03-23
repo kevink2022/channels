@@ -170,9 +170,9 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     
     if (channel->closed){
         // Sem_post on closed to empty the queue
-        // if(channel->recv_queue->count){
-        //     queue_serve(channel->recv_queue);
-        // }
+        if(channel->recv_queue->count){
+            queue_serve(channel->recv_queue);
+        }
         return CLOSED_ERROR;
     }
     else if (buffer_empty(channel->buffer)){
@@ -182,9 +182,9 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
         buffer_remove(channel->buffer, data);
         // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
-        // if(channel->send_queue->count){
-        //     queue_serve(channel->send_queue);
-        // }
+        if(channel->send_queue->count){
+            queue_serve(channel->send_queue);
+        }
         return SUCCESS;
     }
 }
