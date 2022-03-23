@@ -3,66 +3,111 @@
 // Creates and returns a new list
 list_t* list_create()
 {
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-    return NULL;
+    list_t * list = malloc(sizeof(list_t));
+    list->count = 0;
+    list->head = NULL;
+    list->tail = NULL;
+    return list;
 }
 
 // Destroys a list
+// This assumes that all resources can be destroyed
+// I am assuming writing this that the while loop will
+// never actually run, but am writing it anyway
 void list_destroy(list_t* list)
 {
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
+    int i;
+    list_node_t * node = list->head;
+
+    while (list->count) {
+        free(node->data);
+        free(node);
+    }
+    
+    free(list);
+    return;
 }
 
 // Returns beginning of the list
-list_node_t* list_begin(list_t* list)
+static inline list_node_t* list_begin(list_t* list)
 {
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-    return NULL;
+    return list->head;
 }
 
 // Returns next element in the list
-list_node_t* list_next(list_node_t* node)
+static inline list_node_t* list_next(list_node_t* node)
 {
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-    return NULL;
+    return node->next;
 }
 
-// Returns data in the given list node
-void* list_data(list_node_t* node)
-{
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-    return NULL;
-}
+// // Returns data in the given list node
+// void* list_data(list_node_t* node)
+// {
+//     /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
+//     return NULL;
+// }
 
 // Returns the number of elements in the list
-size_t list_count(list_t* list)
-{
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-    return 0;
-}
+// static inline size_t list_count(list_t* list)
+// {
+//     // why?
+//     return 0;
+// }
 
 // Finds the first node in the list with the given data
 // Returns NULL if data could not be found
-list_node_t* list_find(list_t* list, void* data)
-{
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-    return NULL;
-}
+// list_node_t* list_find(list_t* list, void* data)
+// {
+//     /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
+//     return NULL;
+// }
 
 // Inserts a new node in the list with the given data
+// New nodes are inserted at the tail for a quick FIFO design
 void list_insert(list_t* list, void* data)
 {
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
+    list->count++;
+
+    list_node_t * new_node = malloc(sizeof(list_node_t));
+    new_node->next = NULL;
+    
+    if (list->tail = NULL){ 
+        list->head = new_node;
+        new_node->prev = NULL;
+    } else {
+        list->tail->next = new_node;
+        new_node->prev = list->tail;
+    }
+    list->tail = new_node;
+    return;
 }
 
-// Removes a node from the list and frees the node resources
+// Removes a node from the list 
+// DOES NOT FREE RESOUCES -- resources may be shared across lists
+// User's responsibilty to free resources
 void list_remove(list_t* list, list_node_t* node)
 {
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
+    list->count--;
+    
+    if (node->prev == NULL){
+        list->head = node->next;
+    } else {
+        node->prev->next = node->next;
+    }
+
+    if (node->next == NULL){
+        list->tail = node->prev;
+    } else {
+        node->next->prev = node->prev;
+    }
+
+    // Free node BUT NOT DATA, data is shared between multiple lists
+    free(node);
+
 }
 
 // Executes a function for each element in the list
-void list_foreach(list_t* list, void (*func)(void* data))
-{
-    /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
-}
+// void list_foreach(list_t* list, void (*func)(void* data))
+// {
+//     /* IMPLEMENT THIS IF YOU WANT TO USE LINKED LISTS */
+// }
