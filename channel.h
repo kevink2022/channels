@@ -29,10 +29,8 @@ typedef struct {
 
     //
     pthread_mutex_t     lock;  
-    sem_t               recv_sem;       // Semaphore for blocking recieve   -- Not sure why combining these into 1 sem didn't work,
-    sem_t               send_sem;       // Semaphore for blocking recieve       might try again later
-    u_int               recv_queue;     // Tracks how many blocking recieve calls are queued    
-    u_int               send_queue;     // Tracks how many blocking send calls are queued
+    list_t            * recv_queue;     // Tracks how many blocking recieve calls are queued    
+    list_t            * send_queue;     // Tracks how many blocking send calls are queued
     bool                closed; 
 } channel_t;
 
@@ -50,6 +48,14 @@ typedef struct {
     // If dir is SEND, then the message that needs to be sent is given as input in this parameter, data
     void* data;
 } select_t;
+
+typedef struct {
+    sem_t       sem;
+} request_t;
+
+typedef struct {
+    request_t   * request;
+} queue_entry_t;
 
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
@@ -113,9 +119,9 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
 //////////////////////////////////////////
 // NOT THREAD SAFE FUNCTIONS
 
-enum channel_status channel_send_unsafe(channel_t* channel, void* data);
+enum channel_status channel_unsafe_send(channel_t* channel, void* data);
 
-enum channel_status channel_receive_unsafe(channel_t* channel, void** data);
+enum channel_status channel_unsafe_receive(channel_t* channel, void** data);
 
 //////////////////////////////////////////
 // INLINE HELPER FUNCTIONS
@@ -133,5 +139,31 @@ static inline bool buffer_full(buffer_t* buffer){
 static inline bool buffer_empty(buffer_t* buffer){
     return (0 == buffer->size);
 }
+
+//////////////////////////////////////////
+// init_request()
+// 
+request_t * init_request(void);
+
+//////////////////////////////////////////
+// init_request()
+// 
+void destroy_request(request_t * request);
+
+//////////////////////////////////////////
+// queue_add()
+// 
+void queue_add(list_t * queue, request_t * request);
+
+//////////////////////////////////////////
+// queue_serve()
+// 
+void queue_serve(list_t * queue);
+
+//////////////////////////////////////////
+// queue_remove()
+// 
+void queue_remove(list_t * queue, queue_entry_t * entry);
+
 
 #endif // CHANNEL_H
