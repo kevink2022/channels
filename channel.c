@@ -151,12 +151,13 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
         return CHANNEL_FULL;
     }
     else{
+        buffer_add(channel->buffer, data);
         // If there is queued blocking calls, after this receive the 
         //  buffer won't be empty and a recieve can execute
         if(channel->recv_queue->count){
             queue_serve(channel->recv_queue);
         }
-        buffer_add(channel->buffer, data);
+
         return SUCCESS;
     }
 }
@@ -169,21 +170,21 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     
     if (channel->closed){
         // Sem_post on closed to empty the queue
-         if(channel->recv_queue->count){
-            queue_serve(channel->recv_queue);
-        }
+        // if(channel->recv_queue->count){
+        //     queue_serve(channel->recv_queue);
+        // }
         return CLOSED_ERROR;
     }
     else if (buffer_empty(channel->buffer)){
         return CHANNEL_EMPTY;
     }
     else{
+        buffer_remove(channel->buffer, data);
         // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
-        if(channel->send_queue->count){
-            queue_serve(channel->send_queue);
-        }
-        buffer_remove(channel->buffer, data);
+        // if(channel->send_queue->count){
+        //     queue_serve(channel->send_queue);
+        // }
         return SUCCESS;
     }
 }
@@ -317,9 +318,9 @@ queue_entry_t * queue_next(list_t * queue){
 // 
 void queue_remove(list_t * queue, queue_entry_t * entry){
 
-    if(0){
-        destroy_request(entry->request);
-    }
+    // if(0){
+    //     destroy_request(entry->request);
+    // }
 
     list_remove(queue, list_find(queue, entry));
 }
