@@ -66,7 +66,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
     
     if (ret == CHANNEL_FULL){
         // If channel is full, add this send request to the queue.
-        queue_add(channel, send_request);
+        queue_add(channel->send_queue, send_request);
         pthread_mutex_unlock(&(channel->lock));
         sem_wait(&(send_request->sem));
         pthread_mutex_lock( &(send_request->lock) );
@@ -97,7 +97,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     if (ret == CHANNEL_EMPTY){
         // If channel is full, add this send request to the queue.
         service_request_t * recv_request = init_service_request(RECV, -1, data);
-        queue_add(&channel->recv_queue, recv_request);
+        queue_add(channel->recv_queue, recv_request);
         pthread_mutex_unlock(&(channel->lock));
         sem_wait( &(recv_request->sem) );
         pthread_mutex_lock( &(recv_request->lock) );
@@ -259,7 +259,7 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
     if (channel->closed){
         // Sem_post on closed to empty the queue
         if(channel->send_queue->count){
-            serve_request(channel, &channel->send_queue);
+            serve_request(channel, channel->send_queue);
         }
         return CLOSED_ERROR;
     }
@@ -271,7 +271,7 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
         // If there is queued blocking calls, after this receive the 
         //  buffer won't be empty and a recieve can execute
         if(channel->recv_queue->count){
-            serve_request(channel, &channel->recv_queue);
+            serve_request(channel, channel->recv_queue);
         }
         return SUCCESS;
     }
@@ -286,7 +286,7 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     if (channel->closed){
         // Sem_post on closed to empty the queue
         if(channel->recv_queue->count){
-            serve_request(channel, &channel->recv_queue);
+            serve_request(channel, channel->recv_queue);
         }
         return CLOSED_ERROR;
     }
@@ -297,7 +297,7 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
         // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
         if(channel->send_queue->count){
-            serve_request(channel, &channel->send_queue);
+            serve_request(channel, channel->send_queue);
         }
         buffer_remove(channel->buffer, data);
         return SUCCESS;
@@ -387,14 +387,14 @@ void service_request_destroy(service_request_t * service_request){
 }
 
 // Returns the next node for simplicity
-inline static list_node_t * queue_remove(list_t * queue, list_node_t * node){
+list_node_t * queue_remove(list_t * queue, list_node_t * node){
 
     list_node_t * ret_node = node->next;
     list_remove(queue, node);
     return ret_node;
 }
 
-inline static void queue_add(list_t * queue, service_request_t * service_request){
+void queue_add(list_t * queue, service_request_t * service_request){
     list_insert(queue, (void*)service_request);
 }
 
@@ -413,11 +413,9 @@ void clean_request_queue(list_t * queue){
         node_request = (service_request_t*)node->data;
 
         node_request->ret = CLOSED_ERROR;
-        sem_post(node_request);             
+        sem_post( &(node_request->sem) );             
         pthread_mutex_unlock( &(((service_request_t*)node->data)->lock) );
 
         node =  queue_remove(queue, node->prev);
-
     }
-
 }
