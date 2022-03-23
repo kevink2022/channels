@@ -29,8 +29,8 @@ typedef struct {
 
     //
     pthread_mutex_t     lock;  
-    list_t              recv_queue;     // Tracks how many blocking recieve calls are queued    
-    list_t              send_queue;     // Tracks how many blocking send calls are queued
+    list_t            * recv_queue;     // Tracks how many blocking recieve calls are queued    
+    list_t            * send_queue;     // Tracks how many blocking send calls are queued
     bool                closed; 
 } channel_t;
 
@@ -160,14 +160,16 @@ static inline bool buffer_empty(buffer_t* buffer){
     return (0 == buffer->size);
 }
 
-service_request_t * init_service_request(channel_t * channel, enum direction direction, int index, void * data);
+service_request_t * init_service_request(enum direction direction, int index, void * data);
 
-void service_request_destroy(void);
+void service_request_destroy(service_request_t *service_request);
 
-void queue_remove(list_t * queue, service_request_t * service_request);
+list_node_t * queue_remove(list_t * queue, list_node_t * node);
 
 void queue_add(list_t * queue, service_request_t * service_request);
 
 void serve_request(channel_t * channel, list_t * queue);
+
+void clean_request_queue(list_t * queue);
 
 #endif // CHANNEL_H
