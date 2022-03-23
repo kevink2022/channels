@@ -161,6 +161,11 @@ void queue_add(list_t * queue, request_t * request);
 void queue_serve(list_t * queue);
 
 //////////////////////////////////////////
+// queue_next()
+// 
+queue_entry_t * queue_next(list_t * queue);
+
+//////////////////////////////////////////
 // queue_remove()
 // 
 void queue_remove(list_t * queue, queue_entry_t * entry);

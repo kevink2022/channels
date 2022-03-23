@@ -294,15 +294,22 @@ void queue_add(list_t * queue, request_t * request){
 // 
 void queue_serve(list_t * queue){
 
-    queue_entry_t * entry = queue->head;
+    queue_entry_t * entry = queue_next(queue);
 
     if (entry != NULL){
 
-        sem_post(entry->request);
+        sem_post( &(entry->request->sem) );
 
         queue_remove(queue, entry);
     }
 
+}
+
+//////////////////////////////////////////
+// queue_next()
+// 
+queue_entry_t * queue_next(list_t * queue){
+    return queue->head == NULL ? NULL : (queue_entry_t *)queue->head->data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
