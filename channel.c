@@ -48,7 +48,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
     request_t * send_request;
     enum channel_status ret = channel_non_blocking_send(channel, data);
 
-    while(ret == CHANNEL_FULL){
+    if(ret == CHANNEL_FULL){
         send_request = init_request();
         
         pthread_mutex_lock(&(channel->lock));
@@ -80,7 +80,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     request_t * recv_request;
     enum channel_status ret = channel_non_blocking_receive(channel, data);
 
-    while(ret == CHANNEL_EMPTY){ 
+    if(ret == CHANNEL_EMPTY){ 
         recv_request = init_request();
 
         pthread_mutex_lock(&(channel->lock));
