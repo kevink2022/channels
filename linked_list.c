@@ -57,7 +57,7 @@ list_node_t* list_next(list_node_t* node)
 // Returns NULL if data could not be found
 list_node_t* list_find(list_t* list, void* data)
 {
-    list_node_t * node;
+    list_node_t * node = list->head;
 
     while (node != NULL){
 
