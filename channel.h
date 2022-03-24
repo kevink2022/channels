@@ -28,7 +28,8 @@ typedef struct {
     buffer_t*           buffer;
 
     //
-    pthread_mutex_t     lock;  
+    //pthread_mutex_t     lock;
+    sem_t               sem;  
     list_t            * recv_queue;     // Tracks how many blocking recieve calls are queued    
     list_t            * send_queue;     // Tracks how many blocking send calls are queued
     bool                closed; 
