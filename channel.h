@@ -143,7 +143,7 @@ static inline bool buffer_empty(buffer_t* buffer){
 //////////////////////////////////////////
 // init_request()
 // 
-request_t * init_request(void);
+void init_request(request_t * new_request);
 
 //////////////////////////////////////////
 // init_request()

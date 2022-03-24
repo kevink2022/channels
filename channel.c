@@ -55,7 +55,7 @@ channel_t* channel_create(size_t size)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_send(channel_t *channel, void* data)
 {
-    request_t * send_request;
+    request_t send_request;
     enum channel_status ret = channel_non_blocking_send(channel, data);
 
     #ifdef DEBUG
@@ -64,11 +64,11 @@ enum channel_status channel_send(channel_t *channel, void* data)
     #endif
 
     if(ret == CHANNEL_FULL){
-        send_request = init_request();
+        init_request( &send_request );
         
         pthread_mutex_lock(&(channel->lock));
         
-        queue_add(channel->send_queue, send_request);
+        queue_add(channel->send_queue, &send_request);
 
         #ifdef DEBUG
         printf("\nCHANNEL SEND: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)send_request, (u_long)&send_request->sem);
@@ -77,11 +77,12 @@ enum channel_status channel_send(channel_t *channel, void* data)
 
         pthread_mutex_unlock(&(channel->lock));
 
-        sem_wait( &(send_request->sem) );
+        sem_wait( &(send_request.sem) );
 
         ret = channel_non_blocking_send(channel, data);
 
-        destroy_request(send_request);
+        sem_destroy( &(send_request.sem) );
+        //destroy_request( &send_request );
 
         #ifdef DEBUG
         printf("\nCHANNEL SEND: Request answered\n");
@@ -104,7 +105,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
-    request_t * recv_request;
+    request_t recv_request;
     enum channel_status ret = channel_non_blocking_receive(channel, data);
 
     #ifdef DEBUG
@@ -113,11 +114,11 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     #endif
 
     if(ret == CHANNEL_EMPTY){ 
-        recv_request = init_request();
+        init_request( &recv_request );
 
         pthread_mutex_lock(&(channel->lock));
         
-        queue_add(channel->recv_queue, recv_request);
+        queue_add(channel->recv_queue, &recv_request);
 
         #ifdef DEBUG
         printf("\nCHANNEL RECV: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)recv_request, (u_long)&recv_request->sem);
@@ -126,11 +127,12 @@ enum channel_status channel_receive(channel_t* channel, void** data)
         
         pthread_mutex_unlock(&(channel->lock));
         
-        sem_wait(&(recv_request->sem));
+        sem_wait(&(recv_request.sem));
         
         ret = channel_non_blocking_receive(channel, data);
 
-        destroy_request(recv_request);
+        sem_destroy( &(recv_request.sem) );
+        //destroy_request(recv_request);
 
         #ifdef DEBUG
         printf("\nCHANNEL RECV: Request answered\n");
@@ -347,13 +349,11 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
 ////////////////////////////////////////////////////////////////////////////////
 // init_request()
 // 
-request_t * init_request(void){
-
-    request_t * new_request = malloc( sizeof(request_t) );
+void init_request(request_t * new_request){
 
     sem_init( &(new_request->sem), 0, 0);
 
-    return new_request;
+    //return new_request;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -419,6 +419,7 @@ void queue_remove(list_t * queue, queue_entry_t * entry){
     list_remove(queue, list_find(queue, entry));
 }
 
+#ifdef DEBUG
 void print_channel(channel_t * channel){
     list_node_t * node;
     queue_entry_t * entry;
@@ -474,6 +475,7 @@ void print_channel(channel_t * channel){
     printf("\n*******************************************\n\n");
 
 }
+#endif
 
 
 
