@@ -171,7 +171,7 @@ queue_entry_t * queue_next(list_t * queue);
 void queue_remove(list_t * queue, queue_entry_t * entry);
 
 
-void print_channel(channel_t * channel);
+void print_channel(channel_t * channel, char * str);
 
 
 #endif // CHANNEL_H

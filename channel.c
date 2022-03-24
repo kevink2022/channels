@@ -59,8 +59,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
     enum channel_status ret = channel_non_blocking_send(channel, data);
 
     #ifdef DEBUG
-    print_channel(channel);
-    printf("\nCHANNEL SEND: Initial Attempt\n ret: %i\n", ret);
+    print_channel(channel); printf("\nCHANNEL SEND: Initial Attempt\n ret: %i\n", ret);
     #endif
 
     if(ret == CHANNEL_FULL){
@@ -71,8 +70,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
         queue_add(channel->send_queue, send_request);
 
         #ifdef DEBUG
-        print_channel(channel);
-        printf("\nCHANNEL SEND: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)send_request, (u_long)&send_request->sem);
+        print_channel(channel);  printf("\nCHANNEL SEND: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)send_request, (u_long)&send_request->sem);
         #endif
 
         pthread_mutex_unlock(&(channel->lock));
@@ -89,8 +87,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
     }
     
     #ifdef DEBUG
-    print_channel(channel);
-    printf("\nCHANNEL SEND: Exit\n ret: %i\n", ret);
+    print_channel(channel); printf("\nCHANNEL SEND: Exit\n ret: %i\n\n", ret);
     #endif
 
     return ret;
@@ -108,8 +105,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     enum channel_status ret = channel_non_blocking_receive(channel, data);
 
     #ifdef DEBUG
-    print_channel(channel);
-    printf("\nCHANNEL RECV: Initial Attempt\n ret: %i\n", ret);
+    print_channel(channel); printf("\nCHANNEL RECV: Initial Attempt\n ret: %i\n", ret);
     #endif
 
     if(ret == CHANNEL_EMPTY){ 
@@ -120,8 +116,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
         queue_add(channel->recv_queue, recv_request);
 
         #ifdef DEBUG
-        print_channel(channel);
-        printf("\nCHANNEL RECV: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)recv_request, (u_long)&recv_request->sem);
+        print_channel(channel); printf("\nCHANNEL RECV: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)recv_request, (u_long)&recv_request->sem);
         #endif
         
         pthread_mutex_unlock(&(channel->lock));
@@ -138,8 +133,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     }
 
     #ifdef DEBUG
-    print_channel(channel);
-    printf("\nCHANNEL RECV: Exit\n ret: %i\n", ret);
+    print_channel(channel); printf("\nCHANNEL RECV: Exit\n ret: %i\n\n", ret);
     #endif
 
     return ret;
@@ -157,7 +151,7 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 
     #ifdef DEBUG
     print_channel(channel);
-    printf("\nCHANNEL NB SEND: Begin");
+    printf("\nCHANNEL NB SEND: Begin\n");
     #endif
     
     pthread_mutex_lock(&(channel->lock));
@@ -184,7 +178,7 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
 
     #ifdef DEBUG
     print_channel(channel);
-    printf("\nCHANNEL NB RECV: Begin");
+    printf("\nCHANNEL NB RECV: Begin\n");
     #endif
     
     pthread_mutex_lock(&(channel->lock));
@@ -223,14 +217,14 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
 
             #ifdef DEBUG
             print_channel(channel);
-            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() before");
+            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() before\n");
             #endif
 
             queue_serve(channel->recv_queue);
 
             #ifdef DEBUG
             print_channel(channel);
-            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() after");
+            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() after\n");
             #endif
         }
 
@@ -261,15 +255,13 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
         if(channel->send_queue->count){
             
             #ifdef DEBUG
-            print_channel(channel);
-            printf("\nCHANNEL UNSAFE RECV: send queue_serve() before");
+            print_channel(channel); printf("\nCHANNEL UNSAFE RECV: send queue_serve() before\n");
             #endif
             
             queue_serve(channel->send_queue);
         
             #ifdef DEBUG
-            print_channel(channel);
-            printf("\nCHANNEL UNSAFE RECV: send queue_serve() after");
+            print_channel(channel);  printf("\nCHANNEL UNSAFE RECV: send queue_serve() after\n");
             #endif
     
         
@@ -432,12 +424,14 @@ void print_channel(channel_t * channel){
     while(node != NULL){
         printf("\nENTRY %i\n", i);
         entry = (queue_entry_t *)node->data;
-        printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
+        printf(" Location:      %lx\n", (u_long)entry);
+        printf(" Request:       %lx\n", (u_long)entry->request);
         
         request = entry->request;
         printf("\nREQUEST\n");
 
-        printf(" Location:      %lx\n Sem:           %lx", (u_long)request, (u_long)&request->sem);
+        printf(" Location:      %lx\n", (u_long)request);
+        printf(" Sem:           %lx\n", (u_long)&request->sem);
         i++;
         node = node->next;
     }
@@ -449,12 +443,14 @@ void print_channel(channel_t * channel){
     while(node != NULL){
         printf("\nENTRY %i\n", i);
         entry = (queue_entry_t *)node->data;
-        printf(" Location:      %lx\n Request:       %lx\n", (u_long)entry, (u_long)entry->request);
+        printf(" Location:      %lx\n", (u_long)entry);
+        printf(" Request:       %lx\n", (u_long)entry->request);
         
         request = entry->request;
         printf("\nREQUEST\n");
 
-        printf(" Location:      %lx\n Sem:           %lx", (u_long)request, (u_long)&request->sem);
+        printf(" Location:      %lx\n", (u_long)request);
+        printf(" Sem:           %lx\n", (u_long)&request->sem);
         i++;
         node = node->next;
     }
