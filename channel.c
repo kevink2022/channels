@@ -375,6 +375,13 @@ void queue_add(list_t * queue, request_t * request){
     new_entry->request = request;
 
     list_insert(queue, new_entry);
+
+    #ifdef DEBUG
+    printf("\nQUEUE ADD\n Queue:         %lx\n", (u_long)queue);
+    printf(" Request:       %lx\n", (u_long)request);
+    printf(" New Entry:     %lx\n", (u_long)new_entry);
+    printf(" NE_req:        %lx\n", (u_long)new_entry->request);
+    #endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -421,20 +428,22 @@ void print_channel(channel_t * channel){
     printf("\n\n************CHANNEL INFORMATION************\n");
     
     // Print buffer information
-    printf("\nBUFFER INFO\n Size:          %lu\n Capacity:      %lu\n", channel->buffer->size, channel->buffer->capacity);
+    printf("\n--BUFFER INFO--\n Size:          %lu\n Capacity:      %lu\n", channel->buffer->size, channel->buffer->capacity);
 
     // Print send queue information
-    printf("\nSEND QUEUE\n Count: %lu\n", channel->send_queue->count);
+    printf("\n--SEND QUEUE--\n Count: %lu\n", channel->send_queue->count);
     i = 0;
     node = channel->send_queue->head;
     while(node != NULL){
-        printf("\nENTRY %i\n", i);
+        printf("NODE %i\n", i);
+        printf(" Location:      %lx", (u_long)node);
+        printf("ENTRY\n");
         entry = (queue_entry_t *)node->data;
         printf(" Location:      %lx\n", (u_long)entry);
         printf(" Request:       %lx\n", (u_long)entry->request);
         
         request = entry->request;
-        printf("\nREQUEST\n");
+        printf("REQUEST\n");
 
         printf(" Location:      %lx\n", (u_long)request);
         printf(" Sem:           %lx\n", (u_long)&request->sem);
@@ -443,17 +452,19 @@ void print_channel(channel_t * channel){
     }
 
     // Print receive queue information
-    printf("\nRECV QUEUE\n Count: %lu\n", channel->recv_queue->count);
+    printf("\n--RECV QUEUE--\n Count: %lu\n", channel->recv_queue->count);
     i = 0;
     node = channel->recv_queue->head;
     while(node != NULL){
-        printf("\nENTRY %i\n", i);
+        printf("NODE %i\n", i);
+        printf(" Location:      %lx", (u_long)node);
+        printf("ENTRY\n");
         entry = (queue_entry_t *)node->data;
         printf(" Location:      %lx\n", (u_long)entry);
         printf(" Request:       %lx\n", (u_long)entry->request);
         
         request = entry->request;
-        printf("\nREQUEST\n");
+        printf("REQUEST\n");
 
         printf(" Location:      %lx\n", (u_long)request);
         printf(" Sem:           %lx\n", (u_long)&request->sem);
