@@ -143,32 +143,77 @@ static inline bool buffer_empty(buffer_t* buffer){
 //////////////////////////////////////////
 // init_request()
 // 
-request_t * init_request(void);
+static inline request_t * init_request(void){
+
+    request_t * new_request = malloc( sizeof(request_t) );
+
+    sem_init( &(new_request->sem), 0, 0);
+
+    return new_request;
+}
 
 //////////////////////////////////////////
 // init_request()
 // 
-void destroy_request(request_t * request);
+static inline void destroy_request(request_t * request){
+
+    sem_destroy( &(request->sem) );
+    free(request);
+}
 
 //////////////////////////////////////////
 // queue_add()
 // 
-void queue_add(list_t * queue, request_t * request);
+static inline void queue_add(list_t * queue, request_t * request){
 
-//////////////////////////////////////////
-// queue_serve()
-// 
-void queue_serve(list_t * queue);
+    queue_entry_t * new_entry = malloc( sizeof(queue_entry_t) );
+
+    new_entry->request = request;
+
+    list_insert(queue, new_entry);
+
+    #ifdef DEBUG
+    printf("\nQUEUE ADD\n Queue:         %lx\n", (u_long)queue);
+    printf(" Request:       %lx\n", (u_long)request);
+    printf(" New Entry:     %lx\n", (u_long)new_entry);
+    printf(" NE_req:        %lx\n", (u_long)new_entry->request);
+    #endif
+}
 
 //////////////////////////////////////////
 // queue_next()
 // 
-queue_entry_t * queue_next(list_t * queue);
+static inline queue_entry_t * queue_next(list_t * queue){
+    return queue->head == NULL ? NULL : (queue_entry_t *)queue->head->data;
+}
 
 //////////////////////////////////////////
 // queue_remove()
 // 
-void queue_remove(list_t * queue, queue_entry_t * entry);
+static inline void queue_remove(list_t * queue, queue_entry_t * entry){
+
+    // if(0){
+    //     destroy_request(entry->request);
+    // }
+
+    list_remove(queue, list_find(queue, entry));
+}
+
+//////////////////////////////////////////
+// queue_serve()
+// 
+static inline void queue_serve(list_t * queue){
+
+    queue_entry_t * entry = queue_next(queue);
+
+    if (entry != NULL){
+
+        sem_post( &(entry->request->sem) );
+
+        queue_remove(queue, entry);
+    }
+
+}
 
 
 void print_channel(channel_t * channel);

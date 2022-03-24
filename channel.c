@@ -344,10 +344,12 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
     return SUCCESS;
 }
 
+
+#ifdef DEBUG
 ////////////////////////////////////////////////////////////////////////////////
 // init_request()
 // 
-request_t * init_request(void){
+static inline request_t * init_request(void){
 
     request_t * new_request = malloc( sizeof(request_t) );
 
@@ -359,7 +361,7 @@ request_t * init_request(void){
 ////////////////////////////////////////////////////////////////////////////////
 // destroy_request()
 // 
-void destroy_request(request_t * request){
+static inline void destroy_request(request_t * request){
 
     sem_destroy( &(request->sem) );
     free(request);
@@ -368,7 +370,7 @@ void destroy_request(request_t * request){
 ////////////////////////////////////////////////////////////////////////////////
 // queue_add()
 // 
-void queue_add(list_t * queue, request_t * request){
+static inline void queue_add(list_t * queue, request_t * request){
 
     queue_entry_t * new_entry = malloc( sizeof(queue_entry_t) );
 
@@ -403,14 +405,14 @@ void queue_serve(list_t * queue){
 //////////////////////////////////////////
 // queue_next()
 // 
-queue_entry_t * queue_next(list_t * queue){
+static inline queue_entry_t * queue_next(list_t * queue){
     return queue->head == NULL ? NULL : (queue_entry_t *)queue->head->data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // queue_remove()
 // 
-void queue_remove(list_t * queue, queue_entry_t * entry){
+static inline void queue_remove(list_t * queue, queue_entry_t * entry){
 
     // if(0){
     //     destroy_request(entry->request);
@@ -419,6 +421,8 @@ void queue_remove(list_t * queue, queue_entry_t * entry){
     list_remove(queue, list_find(queue, entry));
 }
 
+
+//#ifdef DEBUG
 void print_channel(channel_t * channel){
     list_node_t * node;
     queue_entry_t * entry;
@@ -474,6 +478,7 @@ void print_channel(channel_t * channel){
     printf("\n*******************************************\n\n");
 
 }
+#endif
 
 
 
