@@ -78,6 +78,7 @@ void list_insert(list_t* list, void* data)
 
     list_node_t * new_node = malloc(sizeof(list_node_t));
     new_node->next = NULL;
+    new_node->data = data;
     
     if (list->tail == NULL){ 
         list->head = new_node;
