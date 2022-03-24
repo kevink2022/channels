@@ -21,6 +21,19 @@ enum channel_status {
     DESTROY_ERROR = -3
 };
 
+typedef struct {
+    sem_t               sem;
+    pthread_mutex_t     lock;
+    int                 instances;
+    bool                valid;
+    int               * selected_index;
+} request_t;
+
+typedef struct {
+    request_t         * request;
+    int                 index;
+} queue_entry_t;
+
 // Defines channel object
 typedef struct {
     // DO NOT REMOVE buffer (OR CHANGE ITS NAME) FROM THE STRUCT
@@ -31,6 +44,8 @@ typedef struct {
     pthread_mutex_t     lock;  
     list_t            * recv_queue;     // Tracks how many blocking recieve calls are queued    
     list_t            * send_queue;     // Tracks how many blocking send calls are queued
+    request_t           send_req;
+    request_t           recv_req;
     bool                closed; 
 } channel_t;
 
@@ -49,13 +64,7 @@ typedef struct {
     void* data;
 } select_t;
 
-typedef struct {
-    sem_t       sem;
-} request_t;
 
-typedef struct {
-    request_t   * request;
-} queue_entry_t;
 
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
@@ -143,7 +152,7 @@ static inline bool buffer_empty(buffer_t* buffer){
 //////////////////////////////////////////
 // init_request()
 // 
-void init_request(request_t * new_request);
+void init_request(request_t * new_request, int * selected_index);
 
 //////////////////////////////////////////
 // init_request()
@@ -153,7 +162,7 @@ void destroy_request(request_t * request);
 //////////////////////////////////////////
 // queue_add()
 // 
-void queue_add(list_t * queue, request_t * request);
+void queue_add(list_t * queue, request_t * request, int index);
 
 //////////////////////////////////////////
 // queue_serve()
@@ -171,7 +180,12 @@ queue_entry_t * queue_next(list_t * queue);
 void queue_remove(list_t * queue, queue_entry_t * entry);
 
 
+// DEBUGGING FUNCS
+// Mostly for use in GDB to print out memory structures quickly
+
 void print_channel(channel_t * channel);
+
+void print_channel_list(select_t* channel_list, size_t channel_count);
 
 
 #endif // CHANNEL_H
