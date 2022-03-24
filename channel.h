@@ -26,12 +26,12 @@ typedef struct {
     pthread_mutex_t     lock;
     int                 instances;
     bool                valid;
-    int               * selected_index;
+    size_t            * selected_index;
 } request_t;
 
 typedef struct {
     request_t         * request;
-    int                 index;
+    size_t              index;
 } queue_entry_t;
 
 // Defines channel object
@@ -152,7 +152,7 @@ static inline bool buffer_empty(buffer_t* buffer){
 //////////////////////////////////////////
 // init_request()
 // 
-void init_request(request_t * new_request, int * selected_index);
+void init_request(request_t * new_request, size_t * selected_index);
 
 //////////////////////////////////////////
 // init_request()
@@ -162,7 +162,7 @@ void destroy_request(request_t * request);
 //////////////////////////////////////////
 // queue_add()
 // 
-void queue_add(list_t * queue, request_t * request, int index);
+void queue_add(list_t * queue, request_t * request, size_t index);
 
 //////////////////////////////////////////
 // queue_serve()

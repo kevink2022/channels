@@ -47,4 +47,6 @@ void list_remove(list_t* list, list_node_t* node);
 // Executes a function for each element in the list
 // void list_foreach(list_t* list, void (*func)(void* data));
 
+void list_pop(list_t* list);
+
 #endif // LINKED_LIST_H

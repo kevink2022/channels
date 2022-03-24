@@ -93,24 +93,31 @@ void list_insert(list_t* list, void* data)
 
 // Removes a node from the list, freeing data
 void list_remove(list_t* list, list_node_t* node)
+{   
+    if(node != NULL){
+        list->count--;
+        if (node->prev == NULL){
+            list->head = node->next;
+        } else {
+            node->prev->next = node->next;
+        }
+
+        if (node->next == NULL){
+            list->tail = node->prev;
+        } else {
+            node->next->prev = node->prev;
+        }
+        free(node->data);
+        free(node);
+    }
+}
+
+void list_pop(list_t* list)
 {
-    list->count--;
-    
-    if (node->prev == NULL){
-        list->head = node->next;
-    } else {
-        node->prev->next = node->next;
-    }
-
-    if (node->next == NULL){
-        list->tail = node->prev;
-    } else {
-        node->next->prev = node->prev;
-    }
-
-    free(node->data);
-    free(node);
-
+    list->head = list->head->next;
+    free(list->head->prev->data);
+    free(list->head->prev);
+    list->head->prev = NULL;
 }
 
 // Executes a function for each element in the list

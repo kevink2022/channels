@@ -24,6 +24,8 @@
 
 // #define DEBUG
 
+#define BLOCKING_INDEX 999999999 // Stupid size_t bs won't let me make an index of -1, well heres -1 cast to size_t
+
 
 
 // Creates a new channel with the provided size and returns it to the caller
@@ -42,8 +44,8 @@ channel_t* channel_create(size_t size)
     //pthread_mutex_init(&(new_channel->send_req.lock), NULL);
     sem_init(&new_channel->recv_req.sem, 0, 0);
     sem_init(&new_channel->send_req.sem, 0, 0);
-    // new_channel->recv_req.instances = 1000; // Make these positive numbers so queue_remove() doesn't try
-    // new_channel->send_req.instances = 1000; //   and get rid of them
+    new_channel->recv_req.instances = 1000; // Make these positive numbers so queue_remove() doesn't try
+    new_channel->send_req.instances = 1000; //   and get rid of them
     // new_channel->recv_req.valid = true;     // Valid for these will always be true, since another channel
     // new_channel->send_req.valid = true;     //   will never fullfil the blocking send/recv requets
 
@@ -77,7 +79,7 @@ enum channel_status channel_send(channel_t *channel, void* data)
         
         pthread_mutex_lock(&(channel->lock));
         
-        queue_add(channel->send_queue, &channel->send_req, -1);
+        queue_add(channel->send_queue, &channel->send_req, BLOCKING_INDEX);
 
         #ifdef DEBUG
         printf("\nCHANNEL SEND: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)send_request, (u_long)&send_request->sem);
@@ -127,7 +129,7 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 
         pthread_mutex_lock(&(channel->lock));
         
-        queue_add(channel->recv_queue, &channel->recv_req, -1);
+        queue_add(channel->recv_queue, &channel->recv_req, BLOCKING_INDEX);
 
         #ifdef DEBUG
         printf("\nCHANNEL RECV: Requested\n Request:       %lx\n Sem:           %lx\n", (u_long)recv_request, (u_long)&recv_request->sem);
@@ -173,6 +175,22 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
     
     pthread_mutex_lock(&(channel->lock));
     ret = channel_unsafe_send(channel, data);
+    if(ret == SUCCESS && channel->recv_queue->count){
+
+        #ifdef DEBUG
+        print_channel(channel);
+        printf("\nCHANNEL UNSAFE SEND: recv queue_serve() before\n");
+        #endif
+
+        queue_serve(channel->recv_queue);
+
+        #ifdef DEBUG
+        print_channel(channel);
+        printf("\nCHANNEL UNSAFE SEND: recv queue_serve() after\n");
+        #endif
+    } else if(ret == CLOSED_ERROR && channel->send_queue->count){
+        queue_serve(channel->send_queue);
+    }
     pthread_mutex_unlock(&(channel->lock));
 
     #ifdef DEBUG
@@ -200,6 +218,24 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
     
     pthread_mutex_lock(&(channel->lock));
     ret = channel_unsafe_receive(channel, data);
+    if(ret == SUCCESS && channel->send_queue->count){
+            
+        #ifdef DEBUG
+        print_channel(channel); printf("\nCHANNEL UNSAFE RECV: send queue_serve() before\n");
+        #endif
+        
+        queue_serve(channel->send_queue);
+    
+        #ifdef DEBUG
+        print_channel(channel);  printf("\nCHANNEL UNSAFE RECV: send queue_serve() after\n");
+        #endif
+
+    
+    }
+    else if(ret == CLOSED_ERROR && channel->recv_queue->count){
+        queue_serve(channel->recv_queue);
+    }
+    
     pthread_mutex_unlock(&(channel->lock));
 
     #ifdef DEBUG
@@ -217,10 +253,7 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
 enum channel_status channel_unsafe_send(channel_t* channel, void* data){
     
     if (channel->closed){
-        // Sem_post on closed to empty the queue
-        if(channel->send_queue->count){
-            queue_serve(channel->send_queue);
-        }
+        
         return CLOSED_ERROR;
     }
     else if (buffer_full(channel->buffer)){
@@ -230,20 +263,6 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
         buffer_add(channel->buffer, data);
         // If there is queued blocking calls, after this receive the 
         //  buffer won't be empty and a recieve can execute
-        if(channel->recv_queue->count){
-
-            #ifdef DEBUG
-            print_channel(channel);
-            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() before\n");
-            #endif
-
-            queue_serve(channel->recv_queue);
-
-            #ifdef DEBUG
-            print_channel(channel);
-            printf("\nCHANNEL UNSAFE SEND: recv queue_serve() after\n");
-            #endif
-        }
 
         return SUCCESS;
     }
@@ -257,9 +276,6 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
     
     if (channel->closed){
         // Sem_post on closed to empty the queue
-        if(channel->recv_queue->count){
-            queue_serve(channel->recv_queue);
-        }
         return CLOSED_ERROR;
     }
     else if (buffer_empty(channel->buffer)){
@@ -269,20 +285,7 @@ enum channel_status channel_unsafe_receive(channel_t* channel, void** data){
         buffer_remove(channel->buffer, data);
         // If there is queued blocking calls, after this send the 
         //  buffer won't be full and a send can execute
-        if(channel->send_queue->count){
-            
-            #ifdef DEBUG
-            print_channel(channel); printf("\nCHANNEL UNSAFE RECV: send queue_serve() before\n");
-            #endif
-            
-            queue_serve(channel->send_queue);
         
-            #ifdef DEBUG
-            print_channel(channel);  printf("\nCHANNEL UNSAFE RECV: send queue_serve() after\n");
-            #endif
-    
-        
-        }
         return SUCCESS;
     }
 }
@@ -353,41 +356,90 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
 {
     // print_channel_list(channel_list, channel_count);
     
-    // request_t * request = malloc(sizeof(request_t)); 
-    // init_request(request, selected_index);
-    // int i, j;
-    // enum channel_status ret;
-
-    // if (channel_list->dir == SEND){
-    //     for (i = 0; i < channel_count; i++){
-            
-    //         ret = channel_non_blocking_send(channel_list[i].channel, channel_list->data);
-
-
-    //     }
+    request_t * request = malloc(sizeof(request_t)); 
+    init_request(request, selected_index);
+    size_t i;
+    enum channel_status ret = GEN_ERROR;
     
-    
-    // } else {
+    pthread_mutex_lock( &request->lock ); 
+    for (i = 0; i < channel_count; i++){
 
-    // }
-    
+        if(channel_list[i].dir == SEND)
+        {
+            ret = channel_non_blocking_send(channel_list[i].channel, channel_list->data);
+            if (ret == SUCCESS)
+            { 
+                *selected_index = i;
+                request->valid = false;
+                pthread_mutex_unlock( &request->lock ); 
+                return ret; 
+            }
+            else if (ret == CHANNEL_FULL)
+            {
+                queue_add(channel_list[i].channel->send_queue, request, i);
+            }
+        }
+        else
+        {
+            ret = channel_non_blocking_receive(channel_list[i].channel, &channel_list->data);
+            if (ret == SUCCESS)
+            { 
+                *selected_index = i; 
+                request->valid = false;
+                pthread_mutex_unlock( &request->lock ); 
+                return ret; 
+            }
+            else if (ret == CHANNEL_EMPTY)
+            {
+                queue_add(channel_list[i].channel->recv_queue, request, i);
+            }
+        }
+    }
 
-    return SUCCESS;
+    while(request->instances){
+        pthread_mutex_unlock( &request->lock );
+
+        sem_wait( &request->sem );
+
+        pthread_mutex_lock( &channel_list[*request->selected_index].channel->lock );
+        if(channel_list[*request->selected_index].dir == SEND)
+        {
+            ret = channel_unsafe_send(channel_list[*request->selected_index].channel, channel_list->data);
+        }
+        else
+        {
+            ret = channel_unsafe_receive(channel_list[*request->selected_index].channel, &channel_list->data);
+        }
+        pthread_mutex_unlock( &channel_list[*request->selected_index].channel->lock );
+
+        pthread_mutex_lock( &request->lock );
+        if(ret == SUCCESS){
+            request->valid = false; 
+            if(!request->instances){
+                pthread_mutex_unlock( &request->lock );
+                destroy_request(request);
+            }
+            return ret;
+        } else if (!request->instances){
+            pthread_mutex_unlock( &request->lock );
+            destroy_request(request);
+            return ret;
+        }
+    }
+
+    return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // init_request()
 // 
-void init_request(request_t * new_request, int * selected_index){
+void init_request(request_t * new_request, size_t * selected_index){
 
     sem_init( &(new_request->sem), 0, 0);
     pthread_mutex_init( &(new_request->lock), NULL);
     new_request->valid = true;
     new_request->instances = 0;
     new_request->selected_index = selected_index; 
-
-
-    //return new_request;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -403,13 +455,13 @@ void destroy_request(request_t * request){
 ////////////////////////////////////////////////////////////////////////////////
 // queue_add()
 // 
-void queue_add(list_t * queue, request_t * request, int index){
+void queue_add(list_t * queue, request_t * request, size_t index){
 
     queue_entry_t * new_entry = malloc( sizeof(queue_entry_t) );
 
     new_entry->request = request;
     new_entry->index = index;
-    //request->instances++;
+    request->instances++;
 
     list_insert(queue, new_entry);
 
@@ -430,7 +482,7 @@ void queue_serve(list_t * queue){
 
     while (entry != NULL){
 
-        if (entry->index == -1){
+        if (entry->index == (size_t)BLOCKING_INDEX){
             // This is a blocking send/recv, just need to sem post
             sem_post( &(entry->request->sem) );
             
@@ -443,9 +495,9 @@ void queue_serve(list_t * queue){
             pthread_mutex_lock( &(entry->request->lock) );
             
             if (entry->request->valid){
-                // If index == -1, its not from a select call, and these params can be ignored
-                if(entry->index != -1){ 
-                    entry->request->valid = false;
+                // If index == BLOCKING_INDEX, its not from a select call, and these params can be ignored
+                if(entry->index != (size_t)BLOCKING_INDEX){ 
+                    //entry->request->valid = false;
                     *entry->request->selected_index = entry->index;
                 }
                 
@@ -453,9 +505,11 @@ void queue_serve(list_t * queue){
                 
                 // UNLOCKS entry->request->lock !!!
                 queue_remove(queue, entry);
+                entry = NULL;
             }
             else {
                 // Request is not valid, meaning another channel fufilled it. 
+                sem_post( &(entry->request->sem) ); // Post anyway???
 
                 // UNLOCKS entry->request->lock !!!
                 queue_remove(queue, entry);
@@ -479,9 +533,9 @@ queue_entry_t * queue_next(list_t * queue){
 // ASSUMES entry->request->lock IS HELD
 void queue_remove(list_t * queue, queue_entry_t * entry){
 
-    if(entry->index != -1){
+    if(entry->index != (size_t)BLOCKING_INDEX){
         entry->request->instances--;
-        if (!entry->request->instances){        // If instances == 0, then free the memory associated with the reqest
+        if (!entry->request->instances && !entry->request->valid){        // If instances == 0, then free the memory associated with the reqest
             pthread_mutex_unlock( &(entry->request->lock) );
             destroy_request(entry->request);    // This will never happen to the request embedded in the channel for 
         }                                       //   the blocking calls    
@@ -494,12 +548,55 @@ void queue_remove(list_t * queue, queue_entry_t * entry){
     //entry = NULL;
 }
 
+void queue_close(list_t * queue){
+
+    queue_entry_t * entry = queue_next(queue);
+
+    while (entry != NULL){
+        if (entry->index == (size_t)BLOCKING_INDEX){
+            // This is a blocking send/recv, just need to sem post
+            sem_post( &(entry->request->sem) );
+            
+            // UNLOCKS entry->request->lock !!!
+            queue_remove(queue, entry);
+            entry = queue_next(queue);               // This is regitally important apparantly!
+        } else {
+            // This is a select call, which requires a little more finesse
+            // Lock the request, as other threads may want to access it
+            pthread_mutex_lock( &(entry->request->lock) );
+            
+            if (entry->request->valid){
+                // If index == BLOCKING_INDEX, its not from a select call, and these params can be ignored
+                if(entry->index != (size_t)BLOCKING_INDEX){ 
+                    //entry->request->valid = false;
+                    *entry->request->selected_index = entry->index;
+                }
+                
+                sem_post( &(entry->request->sem) );
+                
+                // UNLOCKS entry->request->lock !!!
+                queue_remove(queue, entry);
+                entry = queue_next(queue);
+            } else {
+                // Request is not valid, meaning another channel fufilled it. 
+
+                // UNLOCKS entry->request->lock !!!
+                queue_remove(queue, entry);
+
+                // Can still fufill a request if one is in queue
+                entry = queue_next(queue);
+            }
+        }
+    }
+}
+
+//#define DEBUG
 #ifdef DEBUG
 void print_channel(channel_t * channel){
     list_node_t * node;
     queue_entry_t * entry;
     request_t * request;
-    int i;
+    size_t i;
     
     printf("\n\n************CHANNEL INFORMATION************\n");
     
@@ -554,7 +651,7 @@ void print_channel(channel_t * channel){
 
 void print_channel_list(select_t* channel_list, size_t channel_count){
 
-    int i;
+    size_t i;
 
     for(i=0; i<channel_count; i++){
         printf("\nCHANNEL %i: %lx", i ,(u_long)&channel_list[i]);
