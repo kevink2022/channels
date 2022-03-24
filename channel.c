@@ -458,7 +458,7 @@ void print_channel(channel_t * channel){
         i++;
         node = node->next;
     }
-    printf("\n************CHANNEL INFORMATION************\n\n");
+    printf("\n*******************************************\n\n");
 
 }
 
