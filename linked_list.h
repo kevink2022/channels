@@ -57,6 +57,9 @@ list_node_t* list_insert(list_t* list, void* data);
 // Removes a node from the list and frees the node resources
 void list_remove(list_t* list, list_node_t* node);
 
+// Removes and returns the data of the head node.
+void* list_pop(list_t* list);
+
 // // Executes a function for each element in the list
 // void list_foreach(list_t* list, void (*func)(void* data));
 
