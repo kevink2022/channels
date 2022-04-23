@@ -2,14 +2,13 @@
 
 // Creates and returns a new list
 // If compare is NULL, list_insert just inserts at the head
-list_t* list_create(compare_fn compare)
+list_t* list_create(void)
 {
     list_t * new_list = malloc(sizeof(list_t));
 
     new_list->head = NULL;
     new_list->tail = NULL;
     new_list->count = 0;
-    new_list->compare = compare;
 
     return new_list;
 }
@@ -95,7 +94,7 @@ list_node_t* list_find(list_t* list, void* data)
 list_node_t* list_insert(list_t* list, void* data)
 {
     list_node_t * new_node  = malloc(sizeof(list_node_t));
-    list_node_t * comp_node = list_head(list);
+    list_node_t * comp_node = list_tail(list);
     new_node->data = data;
 
     if (comp_node == NULL)
@@ -108,68 +107,12 @@ list_node_t* list_insert(list_t* list, void* data)
         list->count++;
         return new_node;
     }
-    else if (list->compare != NULL)
+    else // Just insert at the tail
     {
-        int i, ret;
-        for(i = 0; i < list_count(list); i++)
-        {
-            ret = list->compare(new_node->data, comp_node->data);
-
-            if(ret == -1)      // Place new node before comp node
-            {
-                new_node->next  = comp_node;
-                
-                if(comp_node == list_head(list)){   
-                    new_node->prev          = NULL;
-                    list->head              = new_node;
-                } else {
-                    new_node->prev          = comp_node->prev;
-                    comp_node->prev->next   = new_node;
-                }
-
-                comp_node->prev = new_node;
-                
-                list->count++;
-                return new_node;
-                
-            }
-            else if (ret == 0)  // Arbritrary, but place new node after comp node
-            {                            
-                new_node->prev  = comp_node;
-                
-                if(comp_node == list_tail(list)){
-                    new_node->next          = NULL;
-                    list->tail              = new_node;      // Update tail if necessary   
-                } else {
-                    new_node->next          = comp_node->next;
-                    comp_node->next->prev   = new_node;
-                }
-
-                comp_node->next = new_node;
-
-                list->count++;
-                return new_node;
-            }
-            else 
-            {      
-                comp_node = list_next(comp_node);   // Check next node
-            }
-        }
-        // If here, insert after tail
-        comp_node       = list_tail(list);
         new_node->prev  = comp_node;
         new_node->next  = NULL;
         list->tail      = new_node;
         comp_node->next = new_node;
-        list->count++;
-        return new_node;
-    } 
-    else // No comp function so just place it at beginnging of the list
-    {
-        new_node->next  = comp_node;
-        new_node->prev  = NULL;
-        list->head      = new_node;
-        comp_node->prev = new_node;
         list->count++;
         return new_node;
     }

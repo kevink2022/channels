@@ -4,11 +4,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-// Compares data1 and data2 and returns
-// -1 if data1 goes before data2
-// 0 if data1 is equivalent to data2
-// 1 if data1 goes after data2
-typedef int (*compare_fn)(void* data1, void* data2);
+
 
 typedef struct list_node {
     struct list_node* next; // next node in list
@@ -20,12 +16,11 @@ typedef struct {
     list_node_t* head; // head of the list
     list_node_t* tail; // tail of the list
     size_t count; // count of nodes in the list
-    compare_fn compare; // order for inserting data; NULL indicates to insert at the head
 } list_t;
 
 // Creates and returns a new list
 // If compare is NULL, list_insert just inserts at the head
-list_t* list_create(compare_fn compare);
+list_t* list_create(void);
 
 // Destroys a list
 void list_destroy(list_t* list);
