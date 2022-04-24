@@ -43,7 +43,7 @@ typedef struct {
 
     //////////// Return Data  ////////////
     size_t              selected_index; // Index of channel used (only needed for select)
-    enum channel_status status;         // Return status 
+    enum channel_status ret;         // Return status 
 
 } request_t;
 

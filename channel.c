@@ -25,7 +25,7 @@ request_t* request_create(void* data, enum request_type type)
 
     //////////// Return Data  ////////////
     new_request->selected_index     = PLACEHOLDER_INDEX;
-    new_request->status             = GEN_ERROR;
+    new_request->ret                = GEN_ERROR;
 }
 
 
@@ -91,7 +91,7 @@ void queue_add_request(channel_t* channel, request_t* request, int index)
         new_entry->index   = index;
         new_entry->request = request;
 
-        if(request->type%2) // If odd, its a recv request
+        if(request->type % 2) // If odd, its a recv request
         {
             list_insert(channel->recv_queue, new_entry);    
         }
@@ -101,6 +101,7 @@ void queue_add_request(channel_t* channel, request_t* request, int index)
         }
     }       
 }
+
 
 ////////////////////////////////////////////////
 // queue_get_valid_request()
@@ -112,32 +113,34 @@ request_t * queue_get_valid_request(channel_t* channel, enum direction dir)
     queue_entry_t * entry;
     request_t     * request;
 
-
     entry = list_pop(dir == SEND ? channel->send_queue : channel->recv_queue);
     
     while(entry != NULL)
     {
         request = entry->request;
-        free(entry);
+       
 
         pthread_mutex_lock( &(request->lock) );        
         if(request->valid)
         {
+            request->selected_index = entry->index;
             return request;   
         }
-
+        
+        free(entry);
         request_discard(request);
         entry = list_pop(dir == SEND ? channel->send_queue : channel->recv_queue);
     }
     return NULL;    // No valid request found
 }
 
+
 ////////////////////////////////////////////////
 // channel_unsafe_send()
 // non-blocking, not multithreading safe send function
 //      !! ASSUMES CHANNEL LOCK !!
-enum channel_status channel_unsafe_send(channel_t* channel, void* data){
-    
+enum channel_status channel_unsafe_send(channel_t* channel, void* data, bool check_queue){
+        
     if (channel->closed){
         return CLOSED_ERROR;
     }
@@ -146,6 +149,11 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
     }
     else{
         buffer_add(channel->buffer, data);
+
+        while (check_queue && !buffer_full(channel->buffer))
+        {
+            request_serve(channel, queue_get_valid_request(channel, RECV));
+        }
         return SUCCESS;
     }
 }
@@ -155,7 +163,7 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data){
 // channel_unsafe_recv()
 // non-blocking, not multithreading safe receive function
 //      !! ASSUMES CHANNEL LOCK !!
-enum channel_status channel_unsafe_recv(channel_t* channel, void** data){
+enum channel_status channel_unsafe_recv(channel_t* channel, void** data, bool check_queue){
     
     if (channel->closed){
         return CLOSED_ERROR;
@@ -165,11 +173,47 @@ enum channel_status channel_unsafe_recv(channel_t* channel, void** data){
     }
     else{
         buffer_remove(channel->buffer, data);        
+
+        while (check_queue && !buffer_empty(channel->buffer))
+        {
+            request_serve(channel, queue_get_valid_request(channel, SEND));
+        }
         return SUCCESS;
     }
 }
 
 
+////////////////////////////////////////////////
+// request_serve()
+// sends/recieves request, should only be called on valid requests
+//      !! ASSUMES CHANNEL AND REQUEST LOCK !!
+void request_serve(channel_t* channel, request_t* request)
+{
+    if (request == NULL) { return; }
+    if (!request->valid) { return; }
+
+    enum channel_status ret;
+
+    if(request->type % 2) // If odd, its a recv request
+    {
+        ret = channel_unsafe_recv(channel, &request->data, false);
+    }
+    else                // If even, its a send request
+    {
+        ret = channel_unsafe_send(channel, request->data, false);
+    }
+
+    request->ret = ret;
+
+    if(!(request->type >= 2 && ret != SUCCESS))
+    {   
+        // Don't serve request if ret is closed error and its a select request
+        request->valid = false;
+        sem_post(request->sem);
+    }
+
+    request_discard(request);
+}
 
 
 //////////////////////// MAIN FUNCTIONS ////////////////////////
@@ -199,8 +243,29 @@ channel_t* channel_create(size_t size)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_send(channel_t *channel, void* data)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    enum channel_status ret;
+
+    pthread_mutex_lock(&(channel->lock));
+
+    ret = channel_unsafe_send(channel, data, true);
+
+    if (ret == CHANNEL_FULL)
+    {
+        request_t * request = request_create(data, BLOCKING_SEND);
+        queue_add_request(channel, request, 0);
+        pthread_mutex_unlock(&(channel->lock));
+        
+        sem_wait( &(request->sem) );
+
+        //pthread_mutex_lock(&(request->lock));
+        ret = request->ret;
+        //pthread_mutex_unlock(&(request->lock));
+    }
+    else
+    {
+        pthread_mutex_unlock(&(channel->lock));
+    }
+    return ret;
 }
 
 // Reads data from the given channel and stores it in the function's input parameter, data (Note that it is a double pointer)
@@ -211,8 +276,29 @@ enum channel_status channel_send(channel_t *channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_receive(channel_t* channel, void** data)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    enum channel_status ret;
+
+    pthread_mutex_lock(&(channel->lock));
+
+    ret = channel_unsafe_recv(channel, data, true);
+
+    if (ret == CHANNEL_FULL)
+    {
+        request_t * request = request_create(*data, BLOCKING_RECV); // De-ref as to match select fuctions
+        queue_add_request(channel, request, 0);
+        pthread_mutex_unlock(&(channel->lock));
+        
+        sem_wait( &(request->sem) );
+
+        //pthread_mutex_lock(&(request->lock)); // No need to lock, no other references to worry abt
+        ret = request->ret;
+        //pthread_mutex_unlock(&(request->lock));
+    }
+    else
+    {
+        pthread_mutex_unlock(&(channel->lock));
+    }
+    return ret;
 }
 
 // Writes data to the given channel
@@ -223,8 +309,14 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    enum channel_status ret;
+
+    pthread_mutex_lock(&(channel->lock));
+
+    ret = channel_unsafe_send(channel, data, true);
+
+    pthread_mutex_unlock(&(channel->lock));
+    return ret;
 }
 
 // Reads data from the given channel and stores it in the function's input parameter data (Note that it is a double pointer)
@@ -235,8 +327,15 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
 // GEN_ERROR on encountering any other generic error of any sort
 enum channel_status channel_non_blocking_receive(channel_t* channel, void** data)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    enum channel_status ret;
+
+    pthread_mutex_lock(&(channel->lock));
+
+    ret = channel_unsafe_recv(channel, data, true);
+
+    pthread_mutex_unlock(&(channel->lock));
+
+    return ret;
 }
 
 // Closes the channel and informs all the blocking send/receive/select calls to return with CLOSED_ERROR
@@ -246,8 +345,27 @@ enum channel_status channel_non_blocking_receive(channel_t* channel, void** data
 // GEN_ERROR in any other error case
 enum channel_status channel_close(channel_t* channel)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    pthread_mutex_lock(&(channel->lock));
+    if(!channel->closed){
+        channel->closed = true;
+        
+        // Will empty queues, returning closed error.
+        while (list_count(channel->recv_queue))
+        {
+            request_serve(channel, queue_get_valid_request(channel, RECV));
+        }
+        while (list_count(channel->send_queue))
+        {
+            request_serve(channel, queue_get_valid_request(channel, SEND));
+        }
+
+        pthread_mutex_unlock(&(channel->lock));
+        return SUCCESS;
+    }
+    else {
+        pthread_mutex_unlock(&(channel->lock));
+        return CLOSED_ERROR;
+    }
 }
 
 // Frees all the memory allocated to the channel
