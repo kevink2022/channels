@@ -3,7 +3,7 @@
 //////////////////////// HELPER FUNCTIONS //////////////////////
 
 #define PLACEHOLDER_INDEX 99999
-void request_serve(channel_t* channel, request_t* request);
+void request_serve(channel_t* channel, request_t* request, enum direction dir);
 
 //////////////////////////////////////////
 // buffer_full()
@@ -93,7 +93,7 @@ void request_discard(request_t* request)
 // queue_add_request()
 // adds a request to the appropiate queue
 //      !! ASSUMES CHANNEL AND REQUEST LOCK !!
-void queue_add_request(channel_t* channel, request_t* request, size_t index)
+void queue_add_request(channel_t* channel, request_t* request, size_t index, enum direction dir)
 {
     queue_entry_t * new_entry = malloc(sizeof(queue_entry_t));
 
@@ -114,7 +114,7 @@ void queue_add_request(channel_t* channel, request_t* request, size_t index)
         new_entry->index   = index;
         new_entry->request = request;
 
-        if(request->type % 2) // If odd, its a recv request
+        if(dir == RECV) // If odd, its a recv request
         {
             list_insert(channel->recv_queue, new_entry);    
         }
@@ -177,7 +177,7 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data, bool che
 
         if (check_queue)
         {
-            request_serve(channel, queue_get_valid_request(channel, RECV));
+            request_serve(channel, queue_get_valid_request(channel, RECV), RECV);
         }
         return SUCCESS;
     }
@@ -201,7 +201,7 @@ enum channel_status channel_unsafe_recv(channel_t* channel, void** data, bool ch
 
         if (check_queue)
         {
-            request_serve(channel, queue_get_valid_request(channel, SEND));
+            request_serve(channel, queue_get_valid_request(channel, SEND), SEND);
         }
         return SUCCESS;
     }
@@ -212,14 +212,14 @@ enum channel_status channel_unsafe_recv(channel_t* channel, void** data, bool ch
 // request_serve()
 // sends/recieves request, should only be called on valid requests
 //      !! ASSUMES CHANNEL AND REQUEST LOCK !!
-void request_serve(channel_t* channel, request_t* request)
+void request_serve(channel_t* channel, request_t* request, enum direction dir)
 {
     if (request == NULL) { return; }
     if (!request->valid) { return; }
 
     enum channel_status ret;
 
-    if(request->type % 2) // If odd, its a recv request
+    if(dir == RECV) // If odd, its a recv request
     {
         ret = channel_unsafe_recv(channel, request->data, false);
     }
@@ -230,7 +230,7 @@ void request_serve(channel_t* channel, request_t* request)
 
     request->ret = ret;
 
-    if(!(request->type >= 2 && ret != SUCCESS))
+    if(!(request->type == SELECT && ret != SUCCESS))
     {   
         // Don't serve request if ret is closed error and its a select request
         request->valid = false;
@@ -277,8 +277,8 @@ enum channel_status channel_send(channel_t *channel, void* data)
 
     if (ret == CHANNEL_FULL)
     {
-        request_t * request = request_create(data, BLOCKING_SEND);
-        queue_add_request(channel, request, 0);
+        request_t * request = request_create(data, BLOCKING);
+        queue_add_request(channel, request, 0, SEND);
         pthread_mutex_unlock(&(channel->lock));
         
         sem_wait( &(request->sem) );
@@ -314,8 +314,8 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 
     if (ret == CHANNEL_FULL)
     {
-        request_t * request = request_create(data, BLOCKING_RECV);
-        queue_add_request(channel, request, 0);
+        request_t * request = request_create(data, BLOCKING);
+        queue_add_request(channel, request, 0, RECV);
         pthread_mutex_unlock(&(channel->lock));
         
         sem_wait( &(request->sem) );
@@ -382,11 +382,11 @@ enum channel_status channel_close(channel_t* channel)
         // Will empty queues, returning closed error.
         while (list_count(channel->recv_queue))
         {
-            request_serve(channel, queue_get_valid_request(channel, RECV));
+            request_serve(channel, queue_get_valid_request(channel, RECV), RECV);
         }
         while (list_count(channel->send_queue))
         {
-            request_serve(channel, queue_get_valid_request(channel, SEND));
+            request_serve(channel, queue_get_valid_request(channel, SEND), SEND);
         }
 
         pthread_mutex_unlock(&(channel->lock));

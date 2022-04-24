@@ -22,10 +22,8 @@ enum channel_status {
 };
 
 enum request_type {
-    BLOCKING_SEND = 0,  
-    BLOCKING_RECV = 1,
-    SELECT_SEND   = 2,
-    SELECT_RECV   = 3,
+    BLOCKING = 0,
+    SELECT = 1
 };
 
 typedef struct {
