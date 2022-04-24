@@ -32,7 +32,7 @@ request_t* request_create(void* data, enum request_type type)
     
     ////////////    Locks     ////////////
     pthread_mutex_init(&(new_request->lock), NULL);
-    sem_init( &(new_request->sem), 0, 1);
+    sem_init( &(new_request->sem), 0, 0);
 
     ////////////   Metadata   ////////////
     new_request->refrences  = 1;
@@ -81,6 +81,10 @@ void request_discard(request_t* request)
         sem_post( &(request->sem) );
         pthread_mutex_unlock( &(request->lock) );
     }
+    else
+    {
+        pthread_mutex_unlock( &(request->lock) );
+    }
 
 }
 
@@ -95,6 +99,8 @@ void queue_add_request(channel_t* channel, request_t* request, size_t index)
 
     if(new_entry != NULL)
     {
+        pthread_mutex_lock( &(request->lock) );
+
         // Don't add invalid (already served) request
         if(!request->valid)
         {
@@ -116,6 +122,8 @@ void queue_add_request(channel_t* channel, request_t* request, size_t index)
         {
             list_insert(channel->send_queue, new_entry);    
         }
+
+        pthread_mutex_unlock( &(request->lock) );
     }       
 }
 
@@ -135,12 +143,12 @@ request_t * queue_get_valid_request(channel_t* channel, enum direction dir)
     while(entry != NULL)
     {
         request = entry->request;
-       
 
         pthread_mutex_lock( &(request->lock) );        
         if(request->valid)
         {
             request->selected_index = entry->index;
+            free(entry);
             return request;   
         }
         
@@ -167,7 +175,7 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data, bool che
     else{
         buffer_add(channel->buffer, data);
 
-        while (check_queue && !buffer_full(channel->buffer))
+        if (check_queue)
         {
             request_serve(channel, queue_get_valid_request(channel, RECV));
         }
@@ -191,7 +199,7 @@ enum channel_status channel_unsafe_recv(channel_t* channel, void** data, bool ch
     else{
         buffer_remove(channel->buffer, data);        
 
-        while (check_queue && !buffer_empty(channel->buffer))
+        if (check_queue)
         {
             request_serve(channel, queue_get_valid_request(channel, SEND));
         }
@@ -213,7 +221,7 @@ void request_serve(channel_t* channel, request_t* request)
 
     if(request->type % 2) // If odd, its a recv request
     {
-        ret = channel_unsafe_recv(channel, &request->data, false);
+        ret = channel_unsafe_recv(channel, request->data, false);
     }
     else                  // If even, its a send request
     {
@@ -275,14 +283,18 @@ enum channel_status channel_send(channel_t *channel, void* data)
         
         sem_wait( &(request->sem) );
 
-        //pthread_mutex_lock(&(request->lock));
+        //pthread_mutex_lock(&(channel->lock));
+        pthread_mutex_lock(&(request->lock));
         ret = request->ret;
-        //pthread_mutex_unlock(&(request->lock));
+        request_discard(request);
     }
     else
     {
         pthread_mutex_unlock(&(channel->lock));
     }
+    //pthread_mutex_unlock(&(channel->lock));
+
+    
     return ret;
 }
 
@@ -302,15 +314,15 @@ enum channel_status channel_receive(channel_t* channel, void** data)
 
     if (ret == CHANNEL_FULL)
     {
-        request_t * request = request_create(*data, BLOCKING_RECV); // De-ref as to match select fuctions
+        request_t * request = request_create(data, BLOCKING_RECV);
         queue_add_request(channel, request, 0);
         pthread_mutex_unlock(&(channel->lock));
         
         sem_wait( &(request->sem) );
 
-        //pthread_mutex_lock(&(request->lock)); // No need to lock, no other references to worry abt
+        pthread_mutex_lock(&(request->lock));
         ret = request->ret;
-        //pthread_mutex_unlock(&(request->lock));
+        request_discard(request);
     }
     else
     {
@@ -405,6 +417,7 @@ enum channel_status channel_destroy(channel_t* channel)
         pthread_mutex_unlock(&(channel->lock));
         pthread_mutex_destroy(&(channel->lock));
         free(channel);
+        channel = NULL;
         return SUCCESS;
     }
     else
