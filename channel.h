@@ -21,14 +21,48 @@ enum channel_status {
     DESTROY_ERROR = -3
 };
 
+enum request_type {
+    BLOCKING_SEND,
+    BLOCKING_RECV,
+    SELECT_SEND,
+    SELECT_RECV
+};
+
+typedef struct {
+    //////////// Request Data ////////////
+    void              * data;       // Pointer to data
+    enum request_type   type;       // Type of request
+    
+    ////////////   Metadata   ////////////
+    int                 refrences;  // Number of global refrences to object in heap
+    bool                valid;      // Valid if request has not been serviced yet
+
+    ////////////    Locks     ////////////
+    pthread_mutex_t     lock;       // Lock for viewing/modifying the request data (always lock channel first)
+    sem_t               sem;        // Semaphore the requesting thread waits on
+
+    //////////// Return Data  ////////////
+    size_t              selected_index; // Index of channel used (only needed for select)
+    enum channel_status status;         // Return status 
+
+} request_t;
+
+typedef struct {
+    int         index;              // Index of channel (only needed for select)
+    request_t * request;            // Request
+} queue_entry_t;
+
 // Defines channel object
 typedef struct {
     // DO NOT REMOVE buffer (OR CHANGE ITS NAME) FROM THE STRUCT
     // YOU MUST USE buffer TO STORE YOUR BUFFERED CHANNEL MESSAGES
-    buffer_t* buffer;
+    buffer_t          * buffer;
 
     /* ADD ANY STRUCT ENTRIES YOU NEED HERE */
-    /* IMPLEMENT THIS */
+    bool                closed;     // Self explanatory
+    pthread_mutex_t     lock;       // Lock for viewing/modifying the channel data (always lock channel first)
+    list_t            * send_queue; // Queue for all send type requests 
+    list_t            * recv_queue; // Queue for all recv type requests
 } channel_t;
 
 // Defines channel list structure for channel_select function
