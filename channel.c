@@ -99,8 +99,6 @@ void queue_add_request(channel_t* channel, request_t* request, size_t index, enu
 
     if(new_entry != NULL)
     {
-        pthread_mutex_lock( &(request->lock) );
-
         // Don't add invalid (already served) request
         if(!request->valid)
         {
@@ -122,8 +120,6 @@ void queue_add_request(channel_t* channel, request_t* request, size_t index, enu
         {
             list_insert(channel->send_queue, new_entry);    
         }
-
-        pthread_mutex_unlock( &(request->lock) );
     }       
 }
 
@@ -219,6 +215,21 @@ void request_serve(channel_t* channel, request_t* request, enum direction dir)
 
     enum channel_status ret;
 
+    // If type is select, need to grab the appropirate data ptr here.
+    if(request->type == SELECT)
+    {
+        select_t * channel_list = request->data;
+        
+        if(dir == RECV)
+        {
+            request->data = &channel_list[request->selected_index].data;
+        }
+        else
+        {
+            request->data = channel_list[request->selected_index].data;
+        }
+    }
+
     if(dir == RECV) // If odd, its a recv request
     {
         ret = channel_unsafe_recv(channel, request->data, false);
@@ -278,7 +289,9 @@ enum channel_status channel_send(channel_t *channel, void* data)
     if (ret == CHANNEL_FULL)
     {
         request_t * request = request_create(data, BLOCKING);
+        pthread_mutex_lock( &(request->lock) );
         queue_add_request(channel, request, 0, SEND);
+        pthread_mutex_unlock( &(request->lock) );
         pthread_mutex_unlock(&(channel->lock));
         
         sem_wait( &(request->sem) );
@@ -315,7 +328,9 @@ enum channel_status channel_receive(channel_t* channel, void** data)
     if (ret == CHANNEL_FULL)
     {
         request_t * request = request_create(data, BLOCKING);
+        pthread_mutex_lock( &(request->lock) );
         queue_add_request(channel, request, 0, RECV);
+        pthread_mutex_unlock( &(request->lock) );
         pthread_mutex_unlock(&(channel->lock));
         
         sem_wait( &(request->sem) );
@@ -436,6 +451,64 @@ enum channel_status channel_destroy(channel_t* channel)
 // Additionally, selected_index is set to the index of the channel that generated the error
 enum channel_status channel_select(select_t* channel_list, size_t channel_count, size_t* selected_index)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    request_t         * request = request_create(channel_list, SELECT);
+    select_t            select;
+    channel_t         * channel;
+    enum channel_status ret;
+    size_t i;
+
+    for (i=0; i<channel_count; i++)
+    {
+        // Attempt to send
+        select = channel_list[i];
+        channel = select.channel;
+
+        pthread_mutex_lock(&(request->lock));
+        if (!request->valid)
+        {
+            pthread_mutex_unlock(&(request->lock));
+            break;
+        }
+        pthread_mutex_unlock(&(request->lock));
+
+        // Initial attempt
+        pthread_mutex_lock(&(channel->lock));
+
+        if(select.dir == RECV)
+        {
+            ret = channel_unsafe_recv(channel, &select.data, true);
+        }
+        else
+        {
+            ret = channel_unsafe_send(channel, select.data, true);
+        }
+
+        pthread_mutex_lock(&(request->lock));
+
+        // If success, mark request invalid and return
+        if (ret == SUCCESS)
+        {
+            request->valid          = false;
+            request->ret            = ret;
+            request->selected_index = i;
+        }
+        // If failed, add request to queue
+        else if (ret != CLOSED_ERROR)
+        {
+            queue_add_request(channel, request, i, select.dir);
+        }
+
+        pthread_mutex_unlock(&(request->lock));
+        pthread_mutex_unlock(&(channel->lock));
+    }
+
+    // Wait for sem
+    sem_wait(&(request->sem));
+
+    pthread_mutex_lock(&(request->lock));
+    *selected_index = request->selected_index;
+    ret             = request->ret;
+    request_discard(request);
+
+    return ret;
 }
