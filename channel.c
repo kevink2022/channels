@@ -3,6 +3,21 @@
 //////////////////////// HELPER FUNCTIONS //////////////////////
 
 #define PLACEHOLDER_INDEX 99999
+void request_serve(channel_t* channel, request_t* request);
+
+//////////////////////////////////////////
+// buffer_full()
+// returns true if the buffer is full
+static inline bool buffer_full(buffer_t* buffer){
+    return (buffer->size == buffer->capacity);
+}
+
+//////////////////////////////////////////
+// buffer_empty()
+// returns true if the buffer is full
+static inline bool buffer_empty(buffer_t* buffer){
+    return (0 == buffer->size);
+}
 
 ////////////////////////////////////////////////
 // request_create()
@@ -26,6 +41,8 @@ request_t* request_create(void* data, enum request_type type)
     //////////// Return Data  ////////////
     new_request->selected_index     = PLACEHOLDER_INDEX;
     new_request->ret                = GEN_ERROR;
+
+    return new_request;
 }
 
 
@@ -37,7 +54,7 @@ void request_destroy(request_t* request)
 {
     if(!request->refrences)
     {
-        sem_destroy(request->sem);
+        sem_destroy(&(request->sem));
         pthread_mutex_unlock( &(request->lock) );
         pthread_mutex_destroy( &(request->lock) );
         free(request);
@@ -56,7 +73,7 @@ void request_discard(request_t* request)
     {
         request_destroy(request);
     }
-    else if (!request->refrences == 1 && request->valid)
+    else if (request->refrences == 1 && request->valid)
     {   
         // In this situation, all the channels are closed,
         //   and the last reference is the request owner.
@@ -72,7 +89,7 @@ void request_discard(request_t* request)
 // queue_add_request()
 // adds a request to the appropiate queue
 //      !! ASSUMES CHANNEL AND REQUEST LOCK !!
-void queue_add_request(channel_t* channel, request_t* request, int index)
+void queue_add_request(channel_t* channel, request_t* request, size_t index)
 {
     queue_entry_t * new_entry = malloc(sizeof(queue_entry_t));
 
@@ -198,7 +215,7 @@ void request_serve(channel_t* channel, request_t* request)
     {
         ret = channel_unsafe_recv(channel, &request->data, false);
     }
-    else                // If even, its a send request
+    else                  // If even, its a send request
     {
         ret = channel_unsafe_send(channel, request->data, false);
     }
@@ -209,7 +226,7 @@ void request_serve(channel_t* channel, request_t* request)
     {   
         // Don't serve request if ret is closed error and its a select request
         request->valid = false;
-        sem_post(request->sem);
+        sem_post(&(request->sem));
     }
 
     request_discard(request);
@@ -227,6 +244,7 @@ channel_t* channel_create(size_t size)
     if(new_channel != NULL)
     {
         pthread_mutex_init(&(new_channel->lock), NULL);
+        new_channel->buffer     = buffer_create(size);
         new_channel->send_queue = list_create();
         new_channel->recv_queue = list_create();
         new_channel->closed     = false;
@@ -383,6 +401,7 @@ enum channel_status channel_destroy(channel_t* channel)
     if(channel->closed){
         list_destroy(channel->send_queue);
         list_destroy(channel->recv_queue);
+        buffer_free(channel->buffer);
         pthread_mutex_unlock(&(channel->lock));
         pthread_mutex_destroy(&(channel->lock));
         free(channel);

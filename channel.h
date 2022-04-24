@@ -48,7 +48,7 @@ typedef struct {
 } request_t;
 
 typedef struct {
-    int         index;              // Index of channel (only needed for select)
+    size_t      index;              // Index of channel (only needed for select)
     request_t * request;            // Request
 } queue_entry_t;
 
