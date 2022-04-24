@@ -4,7 +4,16 @@
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)
 {
-    /* IMPLEMENT THIS */
+    channel_t *new_channel = malloc(sizeof(channel_t));
+
+    if(new_channel != NULL)
+    {
+        pthread_mutex_init(&(new_channel->lock), NULL);
+        new_channel->send_queue = list_create();
+        new_channel->recv_queue = list_create();
+        new_channel->closed     = false;
+        return new_channel;
+    }
     return NULL;
 }
 
@@ -74,8 +83,24 @@ enum channel_status channel_close(channel_t* channel)
 // GEN_ERROR in any other error case
 enum channel_status channel_destroy(channel_t* channel)
 {
-    /* IMPLEMENT THIS */
-    return SUCCESS;
+    if(channel == NULL){
+        return GEN_ERROR;
+    }
+
+    pthread_mutex_lock(&(channel->lock));
+    if(channel->closed){
+        list_destroy(channel->send_queue);
+        list_destroy(channel->recv_queue);
+        pthread_mutex_unlock(&(channel->lock));
+        pthread_mutex_destroy(&(channel->lock));
+        free(channel);
+        return SUCCESS;
+    }
+    else
+    {
+        pthread_mutex_unlock(&(channel->lock));
+        return DESTROY_ERROR;
+    }
 }
 
 // Takes an array of channels (channel_list) of type select_t and the array length (channel_count) as inputs
