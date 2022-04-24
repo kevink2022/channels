@@ -2,14 +2,71 @@
 
 //////////////////////// HELPER FUNCTIONS //////////////////////
 
+#define PLACEHOLDER_INDEX 99999
+
 ////////////////////////////////////////////////
 // request_create()
 // creates a request object
+request_t* request_create(void* data, enum request_type type)
+{
+    request_t * new_request = malloc(sizeof(request_t));
+
+    //////////// Request Data ////////////
+    new_request->data       = data;
+    new_request->type       = type;
+    
+    ////////////    Locks     ////////////
+    pthread_mutex_init(&(new_request->lock), NULL);
+    sem_init( &(new_request->sem), 0, 1);
+
+    ////////////   Metadata   ////////////
+    new_request->refrences  = 1;
+    new_request->valid      = true;
+
+    //////////// Return Data  ////////////
+    new_request->selected_index     = PLACEHOLDER_INDEX;
+    new_request->status             = GEN_ERROR;
+}
+
 
 ////////////////////////////////////////////////
-// queue_discard_request()
-// removes request from a channel queue, updating metadata and 
+// request_destroy()
+// destroys a request object
+//      !! ASSUMES REQUEST LOCK !!
+void request_destroy(request_t* request)
+{
+    if(!request->refrences)
+    {
+        sem_destroy(request->sem);
+        pthread_mutex_unlock( &(request->lock) );
+        pthread_mutex_destroy( &(request->lock) );
+        free(request);
+    }   
+}
+
+////////////////////////////////////////////////
+// request_discard()
+// removes a request reference, then cleans memory if necessary
 //      !! ASSUMES CHANNEL AND REQUEST LOCK !!
+//      !! UNLOCKS REQUEST !!
+void request_discard(request_t* request)
+{
+    request->refrences--;
+    if(!request->refrences)
+    {
+        request_destroy(request);
+    }
+    else if (!request->refrences == 1 && request->valid)
+    {   
+        // In this situation, all the channels are closed,
+        //   and the last reference is the request owner.
+        // Post so the owner can return closed
+        sem_post( &(request->sem) );
+        pthread_mutex_unlock( &(request->lock) );
+    }
+
+}
+
 
 ////////////////////////////////////////////////
 // queue_add_request()
@@ -49,12 +106,31 @@ void queue_add_request(channel_t* channel, request_t* request, int index)
 // queue_get_valid_request()
 // searches the queue for a valid request, discarding any invalid ones
 //      !! ASSUMES CHANNEL LOCK !!
+//    !!!! RETURNS LOCKED REQUEST !!!!
 request_t * queue_get_valid_request(channel_t* channel, enum direction dir)
 {
-    return NULL;
+    queue_entry_t * entry;
+    request_t     * request;
+
+
+    entry = list_pop(dir == SEND ? channel->send_queue : channel->recv_queue);
+    
+    while(entry != NULL)
+    {
+        request = entry->request;
+        free(entry);
+
+        pthread_mutex_lock( &(request->lock) );        
+        if(request->valid)
+        {
+            return request;   
+        }
+
+        request_discard(request);
+        entry = list_pop(dir == SEND ? channel->send_queue : channel->recv_queue);
+    }
+    return NULL;    // No valid request found
 }
-
-
 
 ////////////////////////////////////////////////
 // channel_unsafe_send()
