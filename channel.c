@@ -2,14 +2,48 @@
 
 //////////////////////// HELPER FUNCTIONS //////////////////////
 
-
+////////////////////////////////////////////////
+// request_create()
+// creates a request object
 
 ////////////////////////////////////////////////
 // queue_discard_request()
 // removes request from a channel queue, updating metadata and 
 //      !! ASSUMES CHANNEL AND REQUEST LOCK !!
 
+////////////////////////////////////////////////
+// queue_add_request()
+// adds a request to the appropiate queue
+//      !! ASSUMES CHANNEL AND REQUEST LOCK !!
+void queue_add_request(channel_t* channel, request_t* request, int index)
+{
+    queue_entry_t * new_entry = malloc(sizeof(queue_entry_t));
 
+    if(new_entry != NULL)
+    {
+        // Don't add invalid (already served) request
+        if(!request->valid)
+        {
+            return;
+        }
+
+        // Edit request metadata
+        request->refrences++;
+
+        // Init new entry
+        new_entry->index   = index;
+        new_entry->request = request;
+
+        if(request->type%2) // If odd, its a recv request
+        {
+            list_insert(channel->recv_queue, new_entry);    
+        }
+        else                // If even, its a send request
+        {
+            list_insert(channel->send_queue, new_entry);    
+        }
+    }       
+}
 
 ////////////////////////////////////////////////
 // queue_get_valid_request()

@@ -22,10 +22,10 @@ enum channel_status {
 };
 
 enum request_type {
-    BLOCKING_SEND,
-    BLOCKING_RECV,
-    SELECT_SEND,
-    SELECT_RECV
+    BLOCKING_SEND = 0,  
+    BLOCKING_RECV = 1,
+    SELECT_SEND   = 2,
+    SELECT_RECV   = 3,
 };
 
 typedef struct {
@@ -33,13 +33,13 @@ typedef struct {
     void              * data;       // Pointer to data
     enum request_type   type;       // Type of request
     
-    ////////////   Metadata   ////////////
-    int                 refrences;  // Number of global refrences to object in heap
-    bool                valid;      // Valid if request has not been serviced yet
-
     ////////////    Locks     ////////////
     pthread_mutex_t     lock;       // Lock for viewing/modifying the request data (always lock channel first)
     sem_t               sem;        // Semaphore the requesting thread waits on
+
+    ////////////   Metadata   ////////////
+    int                 refrences;  // Number of global refrences to object in heap
+    bool                valid;      // Valid if request has not been serviced yet
 
     //////////// Return Data  ////////////
     size_t              selected_index; // Index of channel used (only needed for select)
