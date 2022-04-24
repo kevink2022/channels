@@ -1,5 +1,69 @@
 #include "channel.h"
 
+//////////////////////// HELPER FUNCTIONS //////////////////////
+
+
+
+////////////////////////////////////////////////
+// queue_discard_request()
+// removes request from a channel queue, updating metadata and 
+//      !! ASSUMES CHANNEL AND REQUEST LOCK !!
+
+
+
+////////////////////////////////////////////////
+// queue_get_valid_request()
+// searches the queue for a valid request, discarding any invalid ones
+//      !! ASSUMES CHANNEL LOCK !!
+request_t * queue_get_valid_request(channel_t* channel, enum direction dir)
+{
+    return NULL;
+}
+
+
+
+////////////////////////////////////////////////
+// channel_unsafe_send()
+// non-blocking, not multithreading safe send function
+//      !! ASSUMES CHANNEL LOCK !!
+enum channel_status channel_unsafe_send(channel_t* channel, void* data){
+    
+    if (channel->closed){
+        return CLOSED_ERROR;
+    }
+    else if (buffer_full(channel->buffer)){
+        return CHANNEL_FULL;
+    }
+    else{
+        buffer_add(channel->buffer, data);
+        return SUCCESS;
+    }
+}
+
+
+////////////////////////////////////////////////
+// channel_unsafe_recv()
+// non-blocking, not multithreading safe receive function
+//      !! ASSUMES CHANNEL LOCK !!
+enum channel_status channel_unsafe_recv(channel_t* channel, void** data){
+    
+    if (channel->closed){
+        return CLOSED_ERROR;
+    }
+    else if (buffer_empty(channel->buffer)){
+        return CHANNEL_EMPTY;
+    }
+    else{
+        buffer_remove(channel->buffer, data);        
+        return SUCCESS;
+    }
+}
+
+
+
+
+//////////////////////// MAIN FUNCTIONS ////////////////////////
+
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size)

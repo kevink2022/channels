@@ -80,6 +80,10 @@ typedef struct {
     void* data;
 } select_t;
 
+
+
+//////////////////////// MAIN FUNCTIONS ////////////////////////
+
 // Creates a new channel with the provided size and returns it to the caller
 // A 0 size indicates an unbuffered channel, whereas a positive size indicates a buffered channel
 channel_t* channel_create(size_t size);
