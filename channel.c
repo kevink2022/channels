@@ -531,7 +531,7 @@ enum channel_status channel_select(select_t* channel_list, size_t channel_count,
             //request->valid          = false;
             //request->ret            = ret;
             *selected_index = i;
-            pthread_mutex_unlock(&(request->lock));
+            request_discard(request);
             pthread_mutex_unlock(&(channel->lock));
             return ret;
         }
