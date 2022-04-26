@@ -158,6 +158,47 @@ request_t * queue_get_valid_request(channel_t* channel, enum direction dir)
     return NULL;    // No valid request found
 }
 
+////////////////////////////////////////////////
+// channel_unbuff_send()
+// non-blocking, not multithreading safe send function
+//      !! ASSUMES CHANNEL LOCK !!
+enum channel_status channel_unbuff_send(channel_t* channel, void* data)
+{
+    request_t * valid_request = queue_get_valid_request(channel, RECV);
+
+    if(valid_request != NULL)
+    {
+        valid_request->data     = &data;
+
+        valid_request->valid    = false;
+        valid_request->ret      = SUCCESS;
+        sem_post( &(valid_request->sem) );
+        request_discard(valid_request);
+        return SUCCESS;
+    }
+    return CHANNEL_FULL;
+}
+
+////////////////////////////////////////////////
+// channel_unbuff_recv()
+// non-blocking, not multithreading safe send function
+//      !! ASSUMES CHANNEL LOCK !!
+enum channel_status channel_unbuff_recv(channel_t* channel, void** data)
+{
+    request_t * valid_request = queue_get_valid_request(channel, SEND);
+
+    if(valid_request != NULL)
+    {
+        *data = valid_request->data;
+
+        valid_request->valid    = false;
+        valid_request->ret      = SUCCESS;
+        sem_post( &(valid_request->sem) );
+        request_discard(valid_request);
+        return SUCCESS;
+    }
+    return CHANNEL_EMPTY;
+}
 
 ////////////////////////////////////////////////
 // channel_unsafe_send()
@@ -175,26 +216,33 @@ enum channel_status channel_unsafe_send(channel_t* channel, void* data, bool che
         }
         return CLOSED_ERROR;
     }
-    else if (buffer_full(channel->buffer))
+    else if (channel->buffered && buffer_full(channel->buffer))
     {
         return CHANNEL_FULL;
     }
     else
     {        
-        buffer_add(channel->buffer, data);
-
-        if(request != NULL)
+        if(channel->buffered)
         {
-            pthread_mutex_lock( &(request->lock) );
-            request->valid = false;
-            pthread_mutex_unlock( &(request->lock) );
-        }
+            buffer_add(channel->buffer, data);
 
-        if (check_queue)
-        {
-            request_serve(channel, queue_get_valid_request(channel, RECV), RECV);
+            if(request != NULL)
+            {
+                pthread_mutex_lock( &(request->lock) );
+                request->valid = false;
+                pthread_mutex_unlock( &(request->lock) );
+            }
+
+            if (check_queue)
+            {
+                request_serve(channel, queue_get_valid_request(channel, RECV), RECV);
+            }
+            return SUCCESS;
         }
-        return SUCCESS;
+        else
+        {
+            return channel_unbuff_send(channel, data);
+        }
     }
 }
 
@@ -215,7 +263,7 @@ enum channel_status channel_unsafe_recv(channel_t* channel, void** data, bool ch
         }
         return CLOSED_ERROR;
     }
-    else if (buffer_empty(channel->buffer))
+    else if (channel->buffered && buffer_empty(channel->buffer))
     {
         return CHANNEL_EMPTY;
     }
@@ -298,12 +346,25 @@ channel_t* channel_create(size_t size)
     if(new_channel != NULL)
     {
         pthread_mutex_init(&(new_channel->lock), NULL);
-        new_channel->buffer     = buffer_create(size);
+
+        if(size)
+        {
+            new_channel->buffer   = buffer_create(size);
+            new_channel->buffered = true;
+        }
+        else
+        {
+            new_channel->buffer   = NULL;
+            new_channel->buffered = false;
+        } 
+
         new_channel->send_queue = list_create();
         new_channel->recv_queue = list_create();
         new_channel->closed     = false;
+
         return new_channel;
     }
+
     return NULL;
 }
 
@@ -396,6 +457,7 @@ enum channel_status channel_non_blocking_send(channel_t* channel, void* data)
     ret = channel_unsafe_send(channel, data, true, NULL);
 
     pthread_mutex_unlock(&(channel->lock));
+
     return ret;
 }
 
@@ -463,7 +525,7 @@ enum channel_status channel_destroy(channel_t* channel)
     if(channel->closed){
         list_destroy(channel->send_queue);
         list_destroy(channel->recv_queue);
-        buffer_free(channel->buffer);
+        if (channel->buffered) { buffer_free(channel->buffer); }
         pthread_mutex_unlock(&(channel->lock));
         pthread_mutex_destroy(&(channel->lock));
         free(channel);
