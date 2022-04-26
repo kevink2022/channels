@@ -23,7 +23,9 @@ enum channel_status {
 
 enum request_type {
     BLOCKING = 0,
-    SELECT = 1
+    SELECT = 1,
+    UNBUF_BLOCKING = 2,
+    UNBUF_SELECT = 3
 };
 
 typedef struct {
@@ -61,6 +63,11 @@ typedef struct {
     pthread_mutex_t     lock;       // Lock for viewing/modifying the channel data (always lock channel first)
     list_t            * send_queue; // Queue for all send type requests 
     list_t            * recv_queue; // Queue for all recv type requests
+
+    // For UNBUFFERED
+    bool                buffered;
+    void              * send_data;
+    void             ** recv_data;
 } channel_t;
 
 // Defines channel list structure for channel_select function
